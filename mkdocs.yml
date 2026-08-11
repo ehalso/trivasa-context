@@ -1,0 +1,17 @@
+site_name: Trivasa BI — Context
+docs_dir: docs
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - search.suggest
+markdown_extensions:
+  - pymdownx.superfences
+  - pymdownx.highlight
+plugins:
+  - search
+  - gen-files:
+      scripts:
+        - scripts/gen_code_pages.py
+  - literate-nav:
+      nav_file: SUMMARY.md
