@@ -1,3 +1,4 @@
+properdocs
 mkdocs-material
 mkdocs-gen-files
 mkdocs-literate-nav

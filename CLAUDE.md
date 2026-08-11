@@ -1,8 +1,8 @@
 # trivasa-context — instrucciones para Claude
 
 Docs + proyectos curados de BI para Trivasa. Un solo lugar: código, queries,
-estado, y contexto de negocio juntos. Servido como sitio con MkDocs Material
-(self-hosted en ctunlinux, ver docs/arquitectura/).
+estado, y contexto de negocio juntos. Servido como sitio estático con
+ProperDocs + Material (Cloudflare Pages, ver docs/arquitectura/).
 
 ## Orden de lectura obligatorio al iniciar sesión
 
@@ -58,17 +58,28 @@ validó al 100%. Un commit de promoción trae código + actualización de
 
 ## scripts/gen_code_pages.py
 
-Se ejecuta automático en cada `mkdocs build` (gen-files + literate-nav).
-Recorre `docs/proyectos/**/*.py` y `**/*.sql`, genera `docs/codigo/` con
-navegación autoconstruida. Nunca editar `docs/codigo/` a mano.
+Se ejecuta automático en cada `properdocs build` (gen-files + literate-nav,
+mismos plugins de siempre — solo cambió el motor de build de mkdocs a
+properdocs, ver docs/arquitectura/wiki-hosting.md). Recorre
+`docs/proyectos/**/*.py` y `**/*.sql`, genera `docs/codigo/` con navegación
+autoconstruida. Nunca editar `docs/codigo/` a mano.
 
 ## Cómo se sirve (producción)
 
-`mkdocs build` → `site/` → nginx en `~/stack/mkdocs-wiki/` (bind-mount
-solo lectura) → Cloudflare Tunnel. Un systemd timer hace `git pull` +
-rebuild automático cada pocos minutos — un `git push` desde cualquier
-lado actualiza el sitio solo. `mkdocs serve` (tmux `mkdocs-wiki`) es solo
-para iterar en desarrollo, nunca la fuente del sitio real.
+Cloudflare Pages. `properdocs build` (config en `properdocs.yml`, ya no
+`mkdocs.yml` — mkdocs entró en fork tras abandono de mantenimiento en 2026,
+ver nota de decisión en docs/arquitectura/wiki-hosting.md) genera `site/`,
+el deploy lo publica. Dominio: trivasa.ehas.uk.
+
+Deploy se corre manualmente desde surface-ehas (tiene wrangler autenticado
+como ehalsou) — no hay redeploy automático todavía. Ver
+docs/arquitectura/wiki-hosting.md.
+
+Nota de decisión: se evaluó self-hosted (nginx + Cloudflare Tunnel, mismo
+patrón que Lightdash/Metabase/Perses) y se descartó a favor de Cloudflare
+Pages por simplicidad de despliegue, aceptando que el contenido queda en
+infraestructura de Cloudflare en vez de exclusivamente en ctunlinux. Ese
+plan self-hosted nunca se llegó a ejecutar.
 
 ## Conexiones a BD
 
