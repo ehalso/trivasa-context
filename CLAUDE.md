@@ -1,39 +1,77 @@
-# Convenciones — trivasa-context
+# trivasa-context — instrucciones para Claude
 
-## Qué es este repo
-Documentación + proyectos curados, agent-first: un solo lugar donde un
-agente encuentra código, queries, estado del proyecto, y contexto de negocio
-juntos. Servido como sitio con MkDocs Material.
+Docs + proyectos curados de BI para Trivasa. Un solo lugar: código, queries,
+estado, y contexto de negocio juntos. Servido como sitio con MkDocs Material
+(self-hosted en ctunlinux, ver docs/arquitectura/).
+
+## Orden de lectura obligatorio al iniciar sesión
+
+1. Este archivo.
+2. `docs/index.md` — punto de entrada, qué proyectos existen.
+3. El `index.md` del proyecto específico que se va a tocar (narrativa,
+   decisiones) y su `PROGRESS.md` (estado vivo) — nunca asumir estado sin
+   leer ambos primero.
+4. `docs/schema/` relevante al dominio, si la tarea toca datos del ERP.
+
+## Regla de oro
+
+Nunca improvisar nombres de tabla, columna, servicio, o convención que no
+estén confirmados en `docs/schema/` o verificados explícitamente con Esteban
+en la conversación. Si hace falta un dato que no está documentado, preguntar
+— no inventar. Esto incluye nombres de conexión, puertos, y rutas de
+`trivasa-bi-core` — si no está en `docs/` de este repo, no se asume.
+
+## Flujo git — doble pull, no solo uno
+
+```text
+git pull --ff-only origin main   # al iniciar sesión
+... trabajo ...
+git pull --ff-only origin main   # INMEDIATO antes del push, no lo saltes
+git add .
+git commit -m "mensaje descriptivo"
+git push
+```
+
+Este repo lo puede tocar más de una sesión de Claude Code en paralelo (una
+en tu WS, otra corriendo de forma autónoma en ctunlinux) — el pull del
+inicio de sesión no cubre toda la ventana de trabajo si la tarea tarda.
+El segundo pull, justo antes del push, reduce la carrera a los segundos
+entre pull y push, que es lo más que se puede achicar sin coordinación
+explícita entre sesiones.
+
+Si ese segundo pull trae conflicto, es casi siempre en `PROGRESS.md` de
+algún proyecto — se resuelve fusionando ambos lados (nunca descartando uno),
+ya que normalmente son líneas de estado distintas, no contradictorias.
 
 ## Regla de promoción — nada llega aquí sin curar
-El trabajo de exploración vive local (no en este repo, ej. `~/por_ordenar/`
-o el scratch de turno). Solo se promueve a `docs/proyectos/<x>/` lo que YA
-validó al 100% — código funcionando, queries correctas. No se sincroniza
-exploración cruda ni intentos fallidos.
 
-## Cada proyecto en docs/proyectos/<x>/ tiene DOS archivos de estado,
-## nunca fusionados:
-- `index.md` — narrativa, decisiones, contexto. Se edita con cuidado,
-  en milestones.
+Exploración cruda vive local, fuera de este repo (`~/por_ordenar/` o scratch
+de turno en WS). Solo se promueve a `docs/proyectos/<x>/` código que ya
+validó al 100%. Un commit de promoción trae código + actualización de
+`index.md` juntos, nunca uno sin el otro.
+
+## Dos archivos de estado por proyecto, nunca fusionados
+
+- `index.md` — narrativa, decisiones, contexto. Se edita con cuidado.
 - `PROGRESS.md` — estado vivo. Se sobreescribe libremente, incluso por un
-  agente autónomo sin supervisión (ej. Claude Code corriendo de noche en
-  ctunlinux). Nunca meter narrativa cuidada aquí, se puede perder.
+  agente autónomo sin supervisión.
 
 ## scripts/gen_code_pages.py
-Se ejecuta automático en cada `mkdocs build` (plugin gen-files +
-literate-nav). Recorre `docs/proyectos/**/*.py` y `**/*.sql`, genera
-`docs/codigo/` con cada archivo envuelto en bloque de código, navegación
-autoconstruida. Nunca editar `docs/codigo/` a mano — se regenera solo.
+
+Se ejecuta automático en cada `mkdocs build` (gen-files + literate-nav).
+Recorre `docs/proyectos/**/*.py` y `**/*.sql`, genera `docs/codigo/` con
+navegación autoconstruida. Nunca editar `docs/codigo/` a mano.
 
 ## Cómo se sirve (producción)
-NO es `mkdocs serve` (eso es solo para iterar en desarrollo, vía tmux
-`mkdocs-wiki`). El sitio real: `mkdocs build` → genera `site/` → nginx en
-`~/stack/mkdocs-wiki/` lo sirve (bind-mount de solo lectura) → expuesto vía
-Cloudflare Tunnel. Un systemd timer (`mkdocs-wiki-rebuild.timer`) hace
-`git pull` + rebuild automático cada pocos minutos — así un `git push` desde
-cualquier lado actualiza el sitio solo, sin intervención manual.
+
+`mkdocs build` → `site/` → nginx en `~/stack/mkdocs-wiki/` (bind-mount
+solo lectura) → Cloudflare Tunnel. Un systemd timer hace `git pull` +
+rebuild automático cada pocos minutos — un `git push` desde cualquier
+lado actualiza el sitio solo. `mkdocs serve` (tmux `mkdocs-wiki`) es solo
+para iterar en desarrollo, nunca la fuente del sitio real.
 
 ## Conexiones a BD
-Si un proyecto necesita conectarse a TRIVASADB3, la conexión se copia
-manualmente desde `trivasa-bi-core/connections/` — no hay symlink ni
-dependencia automática entre los dos repos.
+
+Se copian manualmente desde `trivasa-bi-core/connections/` cuando un
+proyecto las necesita — no hay symlink ni dependencia automática entre
+los dos repos.
