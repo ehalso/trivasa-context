@@ -25,40 +25,67 @@ sucesión distintas dentro del mismo ecosistema.
 
 ## Cómo desplegar un cambio
 
-Desde una máquina con wrangler autenticado (hoy: solo surface-ehas, como
-ehalsou):
+Automático: Cloudflare Pages está conectado al repo de GitHub
+(`ehalso/trivasa-context`, rama `main`, proyecto `trivasa-context-wiki`).
+Cada `git push` a `main` dispara un build en la infraestructura de
+Cloudflare que corre:
+
+```bash
+pip install -r requirements-docs.txt --break-system-packages && properdocs build
+```
+
+y publica el `destination_dir: site`. No requiere wrangler ni ninguna
+máquina en particular — cualquier `git push` a `main` (desde cualquier
+sesión de Claude Code o directo) actualiza el sitio en unos ~15-20
+segundos.
+
+Deploy manual (fallback, si el auto-build falla o para probar un cambio
+sin pushear) sigue disponible desde una máquina con wrangler autenticado:
 
 ```bash
 cd trivasa-context
-git pull --ff-only origin main
-pip install -r requirements-docs.txt --break-system-packages  # solo si cambiaron deps
 properdocs build
 npx wrangler pages deploy site --project-name=trivasa-context-wiki
 ```
 
 ## Estado del dominio custom
 
-El proyecto Pages (`trivasa-context-wiki`) y el registro de dominio custom
-(`trivasa.ehas.uk`) se crearon vía API de Cloudflare (`POST
-.../pages/projects/trivasa-context-wiki/domains`), pero quedó en estado
-`pending` — el token OAuth de `wrangler login` trae `zone:read` pero no
-`dns_records:edit`, así que no pudo crear el CNAME automáticamente. Falta
-completar manualmente uno de estos dos pasos en el dashboard:
+`trivasa.ehas.uk` está `active` en Cloudflare Pages (dominio + certificado
+Google Trust Services confirmados vía API). El registro inicial se creó
+por API con el token de `wrangler login` (que trae `zone:read` pero no
+`dns_records:edit`, así que no pudo crear el CNAME solo); quedó resuelto
+después, aparentemente vía dashboard.
 
-- Cloudflare > Workers & Pages > `trivasa-context-wiki` > Custom domains
-  — debería mostrar `trivasa.ehas.uk` como pendiente; reintentar/confirmar
-  ahí para que la UI (con permisos completos del usuario) cree el CNAME, o
-- Cloudflare > DNS de la zona `ehas.uk` > agregar manualmente un CNAME
-  `trivasa` → `trivasa-context-wiki.pages.dev` (proxied).
+**Posible falso positivo a vigilar:** al verificar desde este entorno,
+`https://trivasa.ehas.uk` devolvió un 403 "Web Filter Violation — Nuevos
+dominios registrados" con un certificado no confiable (TLS interceptado) —
+signatura típica de un filtro de contenido/DNS de red bloqueando por
+categoría "dominio recién registrado" (`ehas.uk` se registró el
+2026-08-09). No parece ser un problema de Cloudflare ni del deploy —
+`https://trivasa-context-wiki.pages.dev` sirve el mismo contenido sin
+problema. Si el dominio custom no carga desde el navegador normal,
+revisar el resolver DNS / filtro de red usado (NextDNS, Cisco Umbrella,
+firewall corporativo, etc.) antes de tocar la config de Cloudflare.
 
-Mientras tanto el sitio ya está en vivo en
-`https://trivasa-context-wiki.pages.dev`.
+## Gotcha: primer auto-deploy vacío al conectar Git
+
+Al conectar `trivasa-context-wiki` al repo de GitHub, el proyecto quedó
+sin `build_command`/`destination_dir` configurados. El primer push activó
+un deploy automático que no corrió ningún build y publicó un
+deployment vacío, que quedó marcado como el más reciente y rompió la
+resolución de `assets/` (el HTML raíz seguía sirviéndose desde caché de
+un deploy manual previo, pero CSS/JS devolvían 404 — mismatch entre el
+deployment "latest" real y lo cacheado). Se corrigió configurando
+`build_config.build_command` y `build_config.destination_dir=site` en el
+proyecto (`PATCH .../pages/projects/trivasa-context-wiki`). Si el sitio
+se ve sin estilos después de un push, es la primera sospecha: revisar
+que el build_command siga configurado y que el build haya corrido
+(`GET .../pages/projects/trivasa-context-wiki/deployments`, stage
+`build` debe decir `success`, no saltarse).
 
 ## Pendiente
 
-No hay redeploy automático. Un cambio en docs/ no se refleja en el sitio
-hasta correr el deploy manual de arriba. Automatizar (sin resolver aún):
-wrangler + auth en ctunlinux con systemd timer, o GitHub Actions con API
-token de Cloudflare como secret (necesitaría scope `dns_records:edit`
-también, para poder resolver el pendiente del dominio custom sin pasos
-manuales).
+Nada crítico. Ideas para más adelante: notificación (email/Slack) cuando
+un build automático falla; darle al token de CI/CD scope
+`dns_records:edit` si se necesita volver a tocar el dominio custom sin
+pasos manuales en dashboard.

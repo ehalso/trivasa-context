@@ -71,9 +71,12 @@ Cloudflare Pages. `properdocs build` (config en `properdocs.yml`, ya no
 ver nota de decisión en docs/arquitectura/wiki-hosting.md) genera `site/`,
 el deploy lo publica. Dominio: trivasa.ehas.uk.
 
-Deploy se corre manualmente desde surface-ehas (tiene wrangler autenticado
-como ehalsou) — no hay redeploy automático todavía. Ver
-docs/arquitectura/wiki-hosting.md.
+Deploy es automático: Cloudflare Pages está conectado al repo de GitHub
+(`ehalso/trivasa-context`, rama `main`) y corre
+`pip install -r requirements-docs.txt --break-system-packages && properdocs
+build` en cada push, publicando `site/`. `git push` desde cualquier lado
+actualiza el sitio solo — no hace falta wrangler ni surface-ehas para el
+día a día. Ver docs/arquitectura/wiki-hosting.md.
 
 Nota de decisión: se evaluó self-hosted (nginx + Cloudflare Tunnel, mismo
 patrón que Lightdash/Metabase/Perses) y se descartó a favor de Cloudflare
