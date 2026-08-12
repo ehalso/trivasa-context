@@ -106,6 +106,18 @@ Proyecto activo en Lightdash: `trivasa_dw` (uuid `df98464b-9806-49f2-b5cb-2f99d4
 
 > ⚠️ **Riesgo abierto, sin resolver:** el password de `postgres-dw` en `~/stack/postgres-warehouse/.env` sigue siendo el placeholder por defecto — nunca se rotó a uno real. Pendiente de cambiar (recordar `down` + `up`, no `restart`, tras el cambio — ver nota de volúmenes arriba).
 
+### Gotcha: host del warehouse — `localhost` no sirve para queries (2026-08-12)
+
+`lightdash deploy --create` guarda en el proyecto la conexión al warehouse tal cual está en `~/.dbt/profiles.yml` (`host: localhost`) — correcto para `dbt run`, que corre en el **host** de ctunlinux. Pero las queries que corren desde la UI de Lightdash las ejecuta el **contenedor** `lightdash`, y ahí `localhost`/`127.0.0.1` apunta al propio contenedor, no al host. Resultado: al abrir cualquier explore, `Error loading results — connect ECONNREFUSED 127.0.0.1:5433`, aunque `dbt debug` y el deploy hayan salido limpios.
+
+Fix aplicado:
+
+1. `~/stack/lightdash/docker-compose.yml` — se agregó `extra_hosts: ["host.docker.internal:host-gateway"]` al servicio `lightdash`, para que ese hostname resuelva al host real (Docker 20.10+, confirmado con Docker 29.6.1). Requiere recrear el contenedor (`down` + `up`, no `restart`) para que tome efecto.
+2. En `profiles.yml` se agregó un target extra `lightdash` (mismo warehouse, solo cambia `host` a `host.docker.internal`) — el target `prod` para `dbt run` en el host queda intacto.
+3. `lightdash set-warehouse --target lightdash -y` — actualiza la conexión guardada del proyecto sin tocar el resto de su config. Este comando existe justo para esto; no hace falta editarlo a mano por la UI ni pegarle a la API directo.
+
+Cualquier proyecto **nuevo** creado con `--create` va a nacer con el mismo problema — correr `set-warehouse --target lightdash` es parte del flujo, no un parche de una sola vez.
+
 ## Higiene antes de comitear
 
 Revisar `git add -A -n` (dry-run) antes del commit real — ya pasó que `.env`/`secrets.toml` casi se cuelan. Checklist: sin `.env`, sin `secrets.toml`, sin `__pycache__`/`venv`, sin logs generados.
