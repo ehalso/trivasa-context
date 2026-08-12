@@ -20,7 +20,7 @@ Los `docker-compose.yml` viven en **`~/stack/`**, fuera de git — un yaml por s
 | Servicio | Contenedor | Puerto | Notas |
 |---|---|---|---|
 | **PostgreSQL warehouse** | `postgres-dw` (`postgres:16`) | `0.0.0.0:5433` | La base `trivasa_dw`. Único expuesto fuera de loopback junto con Metabase. |
-| **Lightdash** | `lightdash` | `127.0.0.1:8090` | + `lightdash-db` (pgvector/pg15), `lightdash-minio`, `lightdash-headless-browser` |
+| **Lightdash** | `lightdash` | `127.0.0.1:8090` | + `lightdash-db` (pgvector/pg15), `lightdash-minio`, `lightdash-headless-browser`. Público vía tunnel: `dash.frento.com.mx` |
 | **Metabase** | `metabase-metabase-1` | `0.0.0.0:3000` | + su propia `postgres:16` |
 | **Loki** | `loki` (`grafana/loki:3.7.6`) | `127.0.0.1:3100` | Destino de los checks de calidad |
 | **Perses** | `perses` (`persesdev/perses:v0.54.0`) | `127.0.0.1:8080` | Dashboards de observabilidad |
@@ -69,8 +69,42 @@ Sustituyó a `dvt-checks/`, que hacía column+schema checks con un contenedor Do
 
 ## Acceso remoto
 
-- **Cloudflare Tunnel** (`cloudflared`) — credenciales en `~/.cloudflared/`.
+- **Cloudflare Tunnel** (`cloudflared`) — credenciales en `~/.cloudflared/` y `/etc/cloudflared/`. Ingress (`/etc/cloudflared/config.yml`), un hostname por servicio:
+
+  | Hostname | Servicio local |
+  |---|---|
+  | `dash.frento.com.mx` | Lightdash (`127.0.0.1:8090`) |
+  | `metabase.frento.com.mx` | Metabase (`localhost:3000`) |
+  | `explore.frento.com.mx` | (`localhost:8501`) |
+  | `data.frento.com.mx` | (`127.0.0.1:8080`, Perses) |
+  | `monitor.frento.com.mx` | (`127.0.0.1:61208`) |
+
 - **ZeroTier** y **RustDesk** instalados en el servidor Windows `.200`.
+
+## Deploy de Lightdash (dbt → explores)
+
+El CLI (`@lightdash/cli`) **no viene preinstalado** con el stack — se instala on-demand vía `npm install -g @lightdash/cli` en la máquina desde la que se despliega (hoy, directo en ctunlinux; compila un binding nativo de `ssh2`, tarda ~2 min).
+
+**Login:** headless, con Personal Access Token — no con OAuth de navegador. El flujo OAuth (`lightdash login <url>`) abre un callback en `localhost:<puerto random>` que corre en la misma máquina que el CLI; si el CLI corre en ctunlinux y el navegador está en otra máquina, el callback nunca llega. Generar el PAT desde `https://dash.frento.com.mx` → *Settings → Personal Access Tokens*, luego:
+
+```
+lightdash login https://dash.frento.com.mx --token <PAT>
+lightdash config set-project --uuid <project-uuid>   # fija el proyecto default
+```
+
+**Antes de desplegar, los modelos deben estar materializados de verdad** (`dbt run --profiles-dir ~/.dbt`) — Lightdash lee el catálogo físico del warehouse (columnas reales vía `information_schema`), no solo el `.yml`. Un modelo nunca corrido no tiene columnas que ofrecer como dimensiones.
+
+> ⚠️ **Nota de decisión / gotcha (2026-08-12):** `+meta: hidden: true` puesto a nivel `dbt_project.yml` (usado hoy para todo `models/staging/`, ver tabla de abajo) **no oculta el explore completo** — oculta las dimensiones individuales. Con 0 dimensiones visibles, Lightdash rechaza el modelo como explore inválido (`No dimensions available`) y el deploy falla para los 14 modelos de staging. Mientras no se investigue la forma correcta de ocultar el explore completo (posiblemente `meta.spotlight.visibility` en vez de `meta.hidden`, sin confirmar), el deploy real es:
+>
+> ```
+> lightdash deploy --exclude staging --profiles-dir ~/.dbt -y
+> ```
+>
+> Solo se despliegan los 6 explores de `marts` (`fct_compras`, `fct_movimientos`, `fct_existencias`, `dim_producto`, `fct_ordenes_compra`, `fct_gastos_cfdi`), que es lo que se consume en Lightdash de todas formas.
+
+Proyecto activo en Lightdash: `trivasa_dw` (uuid `df98464b-9806-49f2-b5cb-2f99d47905ad`).
+
+> ⚠️ **Riesgo abierto, sin resolver:** el password de `postgres-dw` en `~/stack/postgres-warehouse/.env` sigue siendo el placeholder por defecto — nunca se rotó a uno real. Pendiente de cambiar (recordar `down` + `up`, no `restart`, tras el cambio — ver nota de volúmenes arriba).
 
 ## Higiene antes de comitear
 
