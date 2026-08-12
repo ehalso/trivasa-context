@@ -6,8 +6,19 @@ theme:
     - navigation.sections
     - search.suggest
 markdown_extensions:
-  - pymdownx.superfences
+  # El custom_fence de mermaid es lo que hace que los ```mermaid se rendericen
+  # como diagrama y no como bloque de codigo. mkdocs-material trae mermaid.js
+  # incluido, pero solo lo activa si el fence emite class="mermaid".
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.highlight
+  - admonition
+  - pymdownx.details
+  - tables
+  - attr_list
 plugins:
   - search
   - gen-files:

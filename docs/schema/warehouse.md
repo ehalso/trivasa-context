@@ -82,6 +82,8 @@ Solo 2 de 7 tienen cursor usable; las demás son tablas hijas puras de `Sm_Folio
 | 06:50 | `load_solicitudes.run_incremental_207_all()` |
 | 07:00 | `check_raw_freshness.py` |
 
+> Los diagramas ER de estas tablas y sus relaciones verificadas están en [Modelos de datos de `raw`](modelos-raw.md).
+
 ## Qué falta — 800 tablas con datos
 
 La cobertura está sesgada a **compras e inventario**. Prioridades:

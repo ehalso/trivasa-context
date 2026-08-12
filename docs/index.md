@@ -33,6 +33,7 @@ Qué hay en la base de datos y cómo usarla.
 
 - [Convenciones](schema/convenciones.md) — prefijos, FKs, patrones, familias de tablas
 - [Dominios de negocio](schema/dominios.md) — los 14 dominios y los catálogos núcleo
+- [Modelos de datos de `raw`](schema/modelos-raw.md) — diagramas ER de lo que ya está replicado
 - [Calidad de datos](schema/calidad-de-datos.md) — gotchas confirmados
 - [Inventario](schema/inventario.md) — tipos de movimiento y existencia a una fecha
 - [Solicitud de material](schema/solicitud-material.md) — el proceso y su máquina de estados

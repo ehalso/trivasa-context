@@ -10,6 +10,7 @@ Conocimiento sobre la base de datos de Management Pro: cómo está construida, q
 
 ## Por tema
 
+- **[Modelos de datos de `raw`](modelos-raw.md)** — modelo conceptual y lógico (Mermaid) de las 22 tablas ya replicadas, con las relaciones verificadas y las dimensiones que faltan.
 - **[Inventario](inventario.md)** — clasificación de tipos de movimiento y el método validado para calcular existencia a una fecha pasada.
 - **[Solicitud de material](solicitud-material.md)** — el proceso completo, su máquina de estados y dónde vive la autorización presupuestal.
 - **[Reportes nativos](reportes-nativos.md)** — los 549 reportes del ERP, su código de transacción y dónde vive el SQL de cada uno. Son la definición operativa de las métricas del negocio.
