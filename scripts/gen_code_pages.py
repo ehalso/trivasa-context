@@ -14,11 +14,14 @@ for path in sorted(proyectos_dir.rglob("*")):
         continue
 
     rel_path = path.relative_to(".")
-    doc_path = Path("codigo") / path.relative_to(proyectos_dir).with_suffix(path.suffix + ".md")
-    full_doc_path = Path("docs") / doc_path
+    rel_doc_path = path.relative_to(proyectos_dir).with_suffix(path.suffix + ".md")
+    doc_path = Path("codigo") / rel_doc_path
 
-    nav_parts = list(doc_path.parts[:-1]) + [path.name]
-    nav[nav_parts] = doc_path.as_posix()
+    # nav.build_literate_nav() escribe codigo/SUMMARY.md, cuyos links son
+    # relativos a docs/codigo/ -- no llevan el prefijo "codigo/" (si no,
+    # se duplica: "codigo/codigo/...").
+    nav_parts = list(rel_doc_path.parts[:-1]) + [path.name]
+    nav[nav_parts] = rel_doc_path.as_posix()
 
     lang = extensiones[path.suffix]
     with mkdocs_gen_files.open(doc_path, "w") as f:
@@ -28,7 +31,9 @@ for path in sorted(proyectos_dir.rglob("*")):
         f.write(path.read_text(encoding="utf-8", errors="replace"))
         f.write("\n```\n")
 
-    mkdocs_gen_files.set_edit_path(full_doc_path, rel_path)
+    # set_edit_path espera el nombre tal cual se usó en open() (relativo a
+    # docs_dir), no con "docs/" al frente -- si no, el edit_path queda huérfano.
+    mkdocs_gen_files.set_edit_path(doc_path, rel_path)
 
 with mkdocs_gen_files.open("codigo/SUMMARY.md", "w") as nav_file:
     nav_file.writelines(nav.build_literate_nav())

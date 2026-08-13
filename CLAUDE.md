@@ -43,12 +43,20 @@ Si ese segundo pull trae conflicto, es casi siempre en `PROGRESS.md` de
 algún proyecto — se resuelve fusionando ambos lados (nunca descartando uno),
 ya que normalmente son líneas de estado distintas, no contradictorias.
 
-## Regla de promoción — nada llega aquí sin curar
+## Regla de promoción — el corte es "existe notebook", no "100% validado"
 
-Exploración cruda vive local, fuera de este repo (`~/por_ordenar/` o scratch
-de turno en WS). Solo se promueve a `docs/proyectos/<x>/` código que ya
-validó al 100%. Un commit de promoción trae código + actualización de
-`index.md` juntos, nunca uno sin el otro.
+Exploración cruda (heredocs sueltos, pasos intermedios que se descartan)
+vive local, fuera de este repo (`~/por_ordenar/` o scratch de turno en WS).
+Pero en cuanto una exploración cierra en un notebook guardado (`NN_slug.py`,
+patrón del skill `trivasa-sql-exploracion`) ya hay un hallazgo curado —
+eso se promueve a `docs/proyectos/<x>/scripts/`, **aunque la validación no
+haya llegado al 100%**. No esperar a que un hito quede perfecto para que
+sea accesible desde el repo. La condición es dejar explícito el estado
+real (% de cobertura/precisión, qué falta) en el propio notebook y en
+`index.md`/`PROGRESS.md`, para que quien lo lea sepa qué tan sólido es —
+un hallazgo parcial documentado como parcial es útil; uno perdido en un
+scratch local no sirve a nadie más. Un commit de promoción trae código +
+actualización de `index.md` juntos, nunca uno sin el otro.
 
 ## Dos archivos de estado por proyecto, nunca fusionados
 

@@ -53,6 +53,7 @@ Trabajo curado con su código y estado.
 - [Layout de gastos](proyectos/layout-gastos/index.md)
 - [Consumo interno FIFO](proyectos/consumo-interno-fifo/index.md)
 - [varela-bot](proyectos/varela-bot/index.md) — bot de Telegram para avisos y acuses de material listo
+- [notificacion-solicitud-material](proyectos/notificacion-solicitud-material/index.md) — reconstrucción vía SQL de las pestañas de "Control de Solicitudes de material v3" (`ZTRV098`)
 
 ---
 
