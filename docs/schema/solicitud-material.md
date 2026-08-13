@@ -138,6 +138,61 @@ De los folios cuyo último `Pad_Estado` (a fecha de corte 2026-06-30) **no** es 
 
 **Hallazgo operativo:** 508 folios (58% de los que nunca resolvieron a `AU`) siguen con la solicitud en estado **`AC` (activa)** en la cabecera — la solicitud sigue "viva" en el sistema mientras su autorización presupuestal está trabada (en revisión o rechazada) sin resolverse. "Activa" en la cabecera no implica que la autorización esté avanzando.
 
+## Pestañas AB, PR y APG de `ZTRV098` "Control de Solicitudes de material v3"
+
+> Exploración 2026-08-13, reconciliada contra baseline real exportado de
+> pantalla (no solo conteos). Ver también la pestaña DISPONIBLE arriba y
+> [Calidad de datos](calidad-de-datos.md#la-ruta-correcta-patron-polimorfico-_tabla_documento)
+> para el detalle del join polimórfico que hizo posible esto.
+
+El indicador de la propia pantalla resume el significado de cada pestaña:
+`AC` solicitud activa no autorizada · `AU` solicitud autorizada · `AB`
+solicitud con requisición de compra · `PR` solicitud con orden de compra ·
+`APG` solicitud con orden de compra **atrasada** · `DISPONIBLE` solicitud
+con apartado · `FN` surtida en su totalidad o finalizada.
+
+En la práctica, a nivel de línea `(Sm_Folio, Pr_Cve_Producto)`:
+
+- **AB** = existe una `Requisicion_Compra` activa (`Rc_Tabla=
+  'ZTRV_Solicitud_Material'`, `Es_Cve_Estado='AC'`) para esa línea, y la
+  cabecera de la solicitud no está `CE`/`FN`.
+- **PR** = existe una `Orden_Compra` vigente (`Es_Cve_Estado='AC'`, por la
+  ruta directa o indirecta descrita en Calidad de datos) **con
+  `Oc_Fecha_Entrega >= HOY`**.
+- **APG** = mismo criterio que PR pero con `Oc_Fecha_Entrega < HOY`
+  (orden vigente mas ya vencida) — **inferido del nombre del indicador,
+  sin baseline exportado propio que lo confirme** (no confundir con
+  hecho verificado).
+
+Reconciliado contra baseline real exportado el mismo día:
+
+| Pestaña | Baseline | Cobertura | Precisión |
+|---|---:|---:|---:|
+| AB | 89 líneas | 92.13 % | 93.18 % |
+| PR | 165 líneas | 96.97 % | 97.56 % |
+
+**El hallazgo que más subió la precisión de PR** (de 36 % a 97.6 %): sin
+el filtro `Oc_Fecha_Entrega >= HOY`, se contaban órdenes `Es_Cve_Estado=
+'AC'` de hasta 2020 nunca cerradas — `AC` en `Orden_Compra` no implica
+"a tiempo", ver [Calidad de datos](calidad-de-datos.md#joins-que-parecen-obvios-pero-son-falsos).
+
+Query final y notebooks de cierre:
+[`52_notebook_ab_solicitud_material.py`](../codigo/notificacion-solicitud-material/scripts/52_notebook_ab_solicitud_material.py.md),
+[`53_notebook_pr_solicitud_material.py`](../codigo/notificacion-solicitud-material/scripts/53_notebook_pr_solicitud_material.py.md).
+
+### Pestaña AU — parcialmente explorada, sin converger
+
+A diferencia de AB/PR, la pestaña AU (bucket residual: autorizada pero
+aún sin apartado/requisición/OC) **no llegó a una query limpia** contra
+un baseline real de 20 líneas (19 folios): mejor resultado 90 %
+cobertura / ~26 % precisión, sin causa raíz única para los ~50 sobrantes
+(se descartaron: apartados históricos `CE`/`CA`, `Sm_Revisar_Oc`,
+`Sm_Es_Servicio`, antigüedad de `Pad_Fecha`). Confirmado con un caso real
+que parte del ruido es **inherente a comparar contra producción en
+vivo**: a un folio se le creó un apartado activo la misma tarde,
+*después* de que se exportó el baseline de pantalla. Detalle completo en
+`PROGRESS.md` del proyecto.
+
 ## Estado en el warehouse
 
 Las 7 tablas del dominio están replicadas a Postgres (`raw.ztrv_solicitud_*`, 974,866 filas, reconciliadas al 100 % contra `.207`). Ver [Warehouse](warehouse.md#solicitudes-de-material).

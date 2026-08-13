@@ -52,20 +52,57 @@ Notebook de cierre del hito:
 — corre contra `connection_207` (producción), pedido explícito del usuario
 porque comparaba contra la pantalla en vivo.
 
-## Pestaña AU — sin resolver
+## Pestañas AB y PR — resueltas contra baseline real (2026-08-13)
 
-Se intentó reproducir el filtro (38 folios visibles en captura original)
-cruzando `ZTRV_Presupuesto_Autorizacion_Documento.Pad_Estado='AU'` (más
-reciente por folio) + `ZTRV_Solicitud_Material_Detalle.Es_Cve_Estado='AC'`
-+ saldo pendiente ≠ 0. Los conteos contra `.200/TRIVASADB3` nunca
-convergieron a 38 (882, luego 1390 al repetir contra `.207`). **No se llegó
-a una validación limpia** — a diferencia de DISPONIBLE, no hubo baseline
-exportado real para esta pestaña, solo comparación de conteos contra la
-captura de pantalla. Pendiente retomar con un export real.
+Baselines reales exportados por el usuario el mismo día:
+`AB-13-08-2026.xlsx` (89 líneas) y `PR-13-08-2026.xlsx` (165 líneas).
+Reconciliación a nivel `(FOLIO, PRODUCTO)`.
 
-## Pestañas AB, PR, APG, AC RECHAZADO, OC SIN AU, PXC
+**Hallazgo de esquema:** `Requisicion_Compra` y `Orden_Compra` son
+polimórficas igual que `ZTRV_Apartado` y pueden apuntar directo a
+`'ZTRV_Solicitud_Material'`. Detalle completo en
+[Calidad de datos](../../schema/calidad-de-datos.md#la-ruta-correcta-patron-polimorfico-_tabla_documento).
 
-Sin empezar.
+| Pestaña | Cobertura | Precisión |
+|---|---:|---:|
+| AB | 92.13 % | 93.18 % |
+| PR | 96.97 % | 97.56 % |
+
+**El hallazgo que subió la precisión de PR de 36 % a 97.6 %:**
+`Orden_Compra.Es_Cve_Estado='AC'` no distingue "a tiempo" de "atrasada"
+— hay que filtrar además `Oc_Fecha_Entrega >= HOY` (sin eso, se contaban
+órdenes vigentes de hasta 2020, nunca cerradas). Ese sería justo el
+criterio que separa PR de APG, aunque **no hay baseline de APG que lo
+confirme todavía** — es inferencia del nombre del indicador, no dato
+verificado.
+
+Detalle completo, incluyendo diagnóstico de los residuos de precisión,
+en [Solicitud de material](../../schema/solicitud-material.md#pestanas-ab-pr-y-apg-de-ztrv098-control-de-solicitudes-de-material-v3).
+
+Notebooks de cierre:
+[`52_notebook_ab_solicitud_material.py`](../../codigo/notificacion-solicitud-material/scripts/52_notebook_ab_solicitud_material.py.md),
+[`53_notebook_pr_solicitud_material.py`](../../codigo/notificacion-solicitud-material/scripts/53_notebook_pr_solicitud_material.py.md).
+
+## Pestaña AU — baseline real conseguido, pero no converge
+
+Con el baseline real (`AU-13-08-2026.xlsx`, 20 líneas/19 folios — muestra
+chica) se probó: último `Pad_Estado='AU'` + cabecera no `CE`/`FN` + línea
+`Es_Cve_Estado='AC'` + sin apartado/requisición/OC activos. Mejor
+resultado: **90 % cobertura / ~26 % precisión**, sin causa raíz clara
+para los ~50 sobrantes (se descartaron varias hipótesis: apartados
+históricos cerrados/cancelados, `Sm_Revisar_Oc`, `Sm_Es_Servicio`,
+antigüedad). Confirmado con un caso real que parte del ruido es
+**inherente a reconciliar contra producción en vivo**: a un folio se le
+creó un apartado activo la misma tarde, después de exportado el
+baseline. Ver [Solicitud de material](../../schema/solicitud-material.md#pestana-au-parcialmente-explorada-sin-converger)
+y `PROGRESS.md` de este proyecto para el detalle completo del
+diagnóstico.
+
+## Pestañas APG, AC RECHAZADO, OC SIN AU, PXC
+
+Sin baseline exportado — sin empezar. Para APG hay una hipótesis fuerte
+(orden de compra vigente vencida, ver arriba) heredada del hallazgo de
+PR, pendiente de validar con un export real de esa pestaña.
 
 ## Exploración adicional: el flujo de autorización no es monótono
 

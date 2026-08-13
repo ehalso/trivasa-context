@@ -74,6 +74,41 @@ Es **colisión de numeración de folio**: ambas tablas usan el patrón `SS-NNNNN
 
 Existe un puente *indirecto* validado al 99.9 % vía `ZTRV_Presupuesto_Solicitud_Cambio.Sm_Folio` compartido, pero cubre solo ~41 % de las requisiciones formales y solo desde 2024-03-31.
 
+### ✅ La ruta correcta: patrón polimórfico `_Tabla`/`_Documento`
+
+Exploración 2026-08-13. `Requisicion_Compra` y `Orden_Compra` siguen el **mismo patrón polimórfico** que `ZTRV_Apartado` (más abajo) — no hay que reconstruir el link por coincidencia de folio, ambas tablas ya traen el campo diseñado para eso:
+
+- `Requisicion_Compra.Rc_Tabla`/`Rc_Documento` puede apuntar **directo** a `'ZTRV_Solicitud_Material'` (`Rc_Documento = Sm_Folio`). Confirmado sin fan-out: 0 combinaciones `(Rc_Folio, Pr_Cve_Producto)` con más de un `Rc_Documento` distinto.
+- `Orden_Compra.Oc_Tabla`/`Oc_Documento` tiene **dos** rutas hacia la solicitud original:
+  - directa: `Oc_Tabla='ZTRV_SOLICITUD_MATERIAL'`, `Oc_Documento=Sm_Folio`.
+  - indirecta (cuando la OC nació de una requisición formal): `Oc_Tabla='REQUISICION_COMPRA'`, `Oc_Documento=Rc_Folio` — hay que volver a `Requisicion_Compra` (con `Rc_Tabla='ZTRV_Solicitud_Material'` y mismo `Pr_Cve_Producto`) para llegar al `Sm_Folio`.
+
+```sql
+-- ruta directa
+FROM Orden_Compra oc
+INNER JOIN ZTRV_Solicitud_Material sm
+        ON sm.Sm_Folio = oc.Oc_Documento AND oc.Oc_Tabla = 'ZTRV_SOLICITUD_MATERIAL'
+
+-- ruta indirecta (via requisicion)
+FROM Orden_Compra oc
+INNER JOIN Requisicion_Compra rc
+        ON rc.Rc_Folio = oc.Oc_Documento AND oc.Oc_Tabla = 'REQUISICION_COMPRA'
+       AND rc.Pr_Cve_Producto = oc.Pr_Cve_Producto AND rc.Rc_Tabla = 'ZTRV_Solicitud_Material'
+```
+
+**Catálogo `Es_Cve_Estado` de estas dos tablas** (propio de cada una, no relacionado al de `ZTRV_Solicitud_Material`):
+
+| Tabla | Valor | Significado |
+|---|---|---|
+| `Requisicion_Compra` | `AC` | activa/pendiente (aún no se generó una OC) |
+| `Requisicion_Compra` | `RCT` | ya se convirtió en `Orden_Compra` — mayoritario (13,604) |
+| `Requisicion_Compra` | `CA`/`CE` | cancelada/cerrada |
+| `Orden_Compra` | `AC` | vigente — **ojo:** no distingue "a tiempo" de "atrasada" (ver más abajo) |
+| `Orden_Compra` | `RCT`/`RCP` | recibida total/parcial |
+| `Orden_Compra` | `CA` | cancelada |
+
+⚠️ `Orden_Compra.Es_Cve_Estado='AC'` **no equivale a "pendiente de entregar a tiempo"**: hay órdenes `AC` con `Oc_Fecha_Entrega` de hasta 2020, nunca cerradas ni canceladas — deuda de datos, no seguimiento real. Para saber si una orden sigue vigente y a tiempo, filtrar además `Oc_Fecha_Entrega >= HOY`. Detalle completo (con el caso de uso real: pestañas PR/APG de `ZTRV098`) en [Solicitud de material](solicitud-material.md#pestanas-ab-pr-y-apg-de-ztrv098-control-de-solicitudes-de-material-v3).
+
 ### ❌ `Compra_Encabezado.Co_Folio = Orden_Compra.Oc_Folio`
 
 Mismo patrón de colisión — 77 % de fechas invertidas.
