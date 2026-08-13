@@ -2,7 +2,7 @@
 
 > Cómo funciona de verdad el proceso, con evidencia de datos. Es una **personalización de Trivasa** (`ZTRV_*`), no existe en el ERP estándar.
 >
-> Exploración 2026-07-31, corregida y ampliada 2026-08-10.
+> Exploración 2026-07-31, corregida y ampliada 2026-08-10 y 2026-08-13.
 
 ## Resumen en una línea
 
@@ -90,6 +90,53 @@ Joins validados por coherencia de fecha:
 **Mediana de ~1.5 min** para autorizar una solicitud ya revisada.
 
 ⚠️ Filtrar `Pad_Documento <> '{FOLIO}'` — hay filas con el placeholder de plantilla sin sustituir.
+
+### El flujo NO es monótono — existe ciclo de retrabajo
+
+El catálogo de `Pad_Estado` de arriba sugiere un flujo lineal (`RE` → `AU` como final feliz, o `RZR`/`RZA`/`RZ` como rechazo final). **En la práctica no es así**: un folio rechazado en revisión puede corregirse y reingresar, generando una secuencia más larga sobre el mismo folio en la misma tabla (`Pad_Documento` repetido con `Pad_Fecha` distintas).
+
+Patrón de retrabajo confirmado (2026-08-13), sobre la traza completa de `ZTRV_Presupuesto_Autorizacion_Documento`:
+
+```
+RZR (rechazado en revisión) → RZRE (reenviado tras corrección) → RE (revisado de nuevo) → AU o RZA
+```
+
+Secuencias completas observadas (`Pad_Estado` ordenado por `Pad_Fecha`, muestra sobre folios de `Pad_Tabla='ZTRV_SOLICITUD_MATERIAL'`, 15 secuencias distintas en total):
+
+| Secuencia | n folios | % |
+|---|---:|---:|
+| `RE>AU` | 30,115 | 96.27% |
+| `RZR` (solo, sin seguimiento aún) | 412 | 1.32% |
+| `RE>RZA` | 365 | 1.17% |
+| `AU` (solo, autorización directa sin `RE` previo) | 271 | 0.87% |
+| `RE` (solo, sin resolución aún) | 76 | 0.24% |
+| `RZR>RZRE>RE>AU` | 15 | 0.05% |
+| `RZ` (solo) | 14 | 0.04% |
+| `RE>RZA>JU>AU` | 6 | 0.02% |
+| `AU>RE>RZA` | 2 | 0.01% |
+
+**Casos que rompen la intuición de "una sola pasada":**
+
+- Un folio puede tener `AU` seguido de `RE`/`RZA` posteriores, **meses después** (ej. autorizado en julio, vuelto a revisar y rechazado en agosto del mismo año) — `AU` no es garantía de estado final estable.
+- Un folio puede tener dos ciclos completos de rechazo separados por meses (`RZR` en febrero, otro `RZR` en agosto para el mismo folio).
+
+**Implicación práctica:** al tomar "el último `Pad_Estado`" de un folio (`ROW_NUMBER() ... ORDER BY Pad_Fecha DESC`), ese valor es el más reciente observado **a la fecha de la consulta**, no necesariamente un estado terminal — puede volver a cambiar. No cachear ni asumir estabilidad de este campo sin volver a consultar.
+
+### Folios con autorización sin resolver siguen "activos" en la cabecera
+
+De los folios cuyo último `Pad_Estado` (a fecha de corte 2026-06-30) **no** es `AU` (873 folios: `RZR` 404, `RZA` 358, `RE` 51, `RZ` 14, `RZRE` 1), se cruzó contra `ZTRV_Solicitud_Material.Es_Cve_Estado` de la cabecera:
+
+| `Es_Cve_Estado` (cabecera) | n | % |
+|---|---:|---:|
+| `AC` (activa) | 508 | 58.19% |
+| `CE` (cerrada) | 300 | 34.36% |
+| `FN` (finalizada) | 31 | 3.55% |
+| `CA` (cancelada) | 22 | 2.52% |
+| `AB` (abierta) | 7 | 0.80% |
+| `RZ` | 3 | 0.34% |
+| `PR` | 2 | 0.23% |
+
+**Hallazgo operativo:** 508 folios (58% de los que nunca resolvieron a `AU`) siguen con la solicitud en estado **`AC` (activa)** en la cabecera — la solicitud sigue "viva" en el sistema mientras su autorización presupuestal está trabada (en revisión o rechazada) sin resolverse. "Activa" en la cabecera no implica que la autorización esté avanzando.
 
 ## Estado en el warehouse
 

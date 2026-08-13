@@ -2,7 +2,7 @@
 
 > Todo lo de aquí se probó con queries contra la base. **No re-descubrirlo dos veces**: si algo cambia, actualizar este archivo.
 >
-> Consolidado de exploraciones 2026-07-22 a 2026-08-10.
+> Consolidado de exploraciones 2026-07-22 a 2026-08-13.
 
 ## Lo que está bien
 
@@ -50,6 +50,18 @@ SELECT Es_Cve_Estado, COUNT(*) FROM <tabla> GROUP BY Es_Cve_Estado ORDER BY 2 DE
 
 12,794 de 27,359 en `BA`. Cualquier conteo de "productos" sin filtrar duplica la cifra real.
 
+### El estado de detalle no hereda el de cabecera (`ZTRV_Solicitud_Material_Detalle`)
+
+`ZTRV_Solicitud_Material.Es_Cve_Estado` (cabecera) **no** determina el estado de cada línea. Cada renglón de `ZTRV_Solicitud_Material_Detalle` trae su propio `Es_Cve_Estado`, independiente entre sí y de la cabecera. Ejemplo real, folio `05-0066443` (cabecera en `PR`):
+
+| Línea | Producto | `Es_Cve_Estado` |
+|---|---|---|
+| 0001 | CANAL U DE 4" | `CE` |
+| 0002 | SOLERA DE 3" X 5/16" | `AB` |
+| 0003 | CINTA REFLEJANTE 3M | `AC` |
+
+Cualquier pantalla o reporte que muestre "solicitudes en estado X" por pestaña (p. ej. las pestañas AC/AU/AB/PR de `ZTRV098` "Control de Solicitudes de material v3") probablemente filtra por el estado de la **línea**, no solo por el de la cabecera. No asumir que basta con filtrar la cabecera. Ver [Solicitud de material](solicitud-material.md).
+
 ---
 
 ## Joins que parecen obvios pero son falsos
@@ -69,6 +81,27 @@ Mismo patrón de colisión — 77 % de fechas invertidas.
 ### ✅ La dirección correcta: `Compra_Encabezado.Co_Documento = Orden_Compra.Oc_Folio`
 
 Con `Co_Tabla='ORDEN_COMPRA'`. Este **sí** es el campo polimórfico diseñado para el enlace. Confirmado: 40,312 `Compra_Encabezado` con `Co_Tabla='ORDEN_COMPRA'`, 95,117 matches (el fan-out es esperado: una OC puede recibirse en partes y tiene múltiples líneas).
+
+### ❌ `ZTRV_Apartado.Ap_Documento` no es `Sm_Folio` cuando `Ap_Tabla='COMPRA'`
+
+`ZTRV_Apartado` (registra apartados de inventario contra una solicitud de material) sigue el mismo patrón polimórfico `Ap_Tabla`/`Ap_Documento` que el resto del ERP — pero **además** trae una columna dedicada `Sm_Folio` que siempre apunta a la solicitud de material original, sin importar qué haya en `Ap_Tabla`. Cuando `Ap_Tabla='COMPRA'`, `Ap_Documento` trae el folio de la **orden de compra**, no el de la solicitud. Confirmado con folio real:
+
+```
+Ap_Tabla='COMPRA', Ap_Documento='05-0025529'  (folio de compra)
+Sm_Folio='05-0056696'                          (la solicitud real)
+```
+
+Un query que una por `Ap_Documento` esperando volver a la solicitud pierde silenciosamente todos los apartados originados desde compra — sin error, solo resultados incompletos. En una validación contra un baseline exportado de pantalla (2026-08-13), este error de join dejó fuera ~37 % de los folios esperados (188 de 510) hasta corregirlo.
+
+### ✅ Usar siempre `Sm_Folio` para volver a la solicitud
+
+```sql
+FROM ZTRV_Apartado ap
+INNER JOIN ZTRV_Solicitud_Material sm ON sm.Sm_Folio = ap.Sm_Folio   -- correcto
+-- NO: ON sm.Sm_Folio = ap.Ap_Documento
+```
+
+`ZTRV_Apartado.Es_Cve_Estado` es un campo de estado **propio** de la tabla, no relacionado con el `Es_Cve_Estado` de `ZTRV_Solicitud_Material` ni el de su detalle. Valores observados: `SUR` (surtido, mayoritario), `CA` (cancelado), `CE` (cerrado), `AC` (activo) — para apartados vigentes, filtrar `ap.Es_Cve_Estado = 'AC'`. Columnas relevantes adicionales: `Ap_Cantidad_Control_1` (cantidad apartada), `Ap_Consumido_Control_1` (cantidad ya consumida) — en la muestra explorada, para folios con `Es_Cve_Estado='AC'`, `Ap_Consumido_Control_1` siempre fue 0 (no confirmado que sea invariante).
 
 ---
 
