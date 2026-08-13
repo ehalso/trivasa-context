@@ -3,8 +3,8 @@
 ## 2026-08-12
 
 - Estructura inicial del proyecto creada (handlers, services, jobs, db.py, schema.sql,
-  Dockerfile, docker-compose.yml) en `~/varela-bot`. Repo con commits locales, sin
-  remote todavía.
+  Dockerfile, docker-compose.yml) en `~/varela-bot`. Repo pusheado a
+  [`ehalso/varela-bot`](https://github.com/ehalso/varela-bot) (privado).
 - `TELEGRAM_BOT_TOKEN` recibido y respaldado en Infisical (`secret-management`, env
   `dev`) — solo como copia, no conectado al runtime del bot (ver decisión en
   `index.md`).
@@ -42,5 +42,3 @@
   (implica desactivar *privacy mode* en BotFather).
 - [ ] Revisar el límite de 5 opciones en el teclado de fallback si el volumen real de
   avisos pendientes lo amerita.
-- [ ] Crear repo remoto (GitHub) para `varela-bot` si se quiere respaldo/colaboración
-  fuera de ctunlinux — hoy solo existe local.

@@ -4,8 +4,8 @@ Bot de Telegram (python-telegram-bot v20+, async, webhook) para personal de recu
 materiales de Trivasa: avisa que hay que notificar a un cliente que su material está
 listo, y espera la foto del acuse de entrega/recolección.
 
-**Código:** repo separado `~/varela-bot` en ctunlinux, no vive dentro de este repo.
-Todavía sin remote (sin GitHub) al 2026-08-12 — solo commits locales.
+**Código:** repo separado, [`ehalso/varela-bot`](https://github.com/ehalso/varela-bot)
+(privado) — no vive dentro de este repo. Copia local en `~/varela-bot` en ctunlinux.
 
 ## Cómo funciona
 
