@@ -78,6 +78,7 @@ Sustituyó a `dvt-checks/`, que hacía column+schema checks con un contenedor Do
   | `explore.frento.com.mx` | (`localhost:8501`) |
   | `data.frento.com.mx` | (`127.0.0.1:8080`, Perses) |
   | `monitor.frento.com.mx` | (`127.0.0.1:61208`) |
+  | `bot.frento.com.mx` | `varela-bot` (`127.0.0.1:8091`) — no es BI, ver [proyectos/varela-bot](../proyectos/varela-bot/index.md) |
 
 - **ZeroTier** y **RustDesk** instalados en el servidor Windows `.200`.
 

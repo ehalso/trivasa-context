@@ -52,6 +52,7 @@ Trabajo curado con su código y estado.
 - [Consulta XMLs](proyectos/consulta-xmls/index.md)
 - [Layout de gastos](proyectos/layout-gastos/index.md)
 - [Consumo interno FIFO](proyectos/consumo-interno-fifo/index.md)
+- [varela-bot](proyectos/varela-bot/index.md) — bot de Telegram para avisos y acuses de material listo
 
 ---
 
