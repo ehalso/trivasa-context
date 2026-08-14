@@ -55,6 +55,23 @@ en [Warehouse](../../schema/warehouse.md#solicitudes-de-material) y
 Código en `trivasa-bi-core` (`load_solicitudes.py`, `load_compras_inventario.py`,
 `connections/connection_205_trivasadb3.py`).
 
+## 2026-08-14 — marts de dbt y tablero de Lightdash
+
+Construidos `fct_solicitud_material_pipeline` (grano línea, 250,992
+filas) y `fct_solicitud_material_autorizacion` (grano folio, 31,294
+filas) en `trivasa-bi-core` — capa completa staging→intermediate→marts
+sobre las tablas raw subidas el día anterior. Publicado el dashboard
+[Solicitudes de material · Backlog vivo](https://dash.frento.com.mx/projects/df98464b-9806-49f2-b5cb-2f99d47905ad/dashboards/6655b5bf-cfce-46de-97b1-07e87eeb4e48/view)
+(8 charts + 1 dashboard, como contenido-como-código en
+`lightdash/charts/`/`lightdash/dashboards/`). Hallazgos de negocio (no
+metodología) en [hallazgos-de-negocio.md](hallazgos-de-negocio.md).
+
+Gotcha nuevo encontrado en el camino: `Pad_Tabla` tiene dos variantes de
+casing (`ZTRV_SOLICITUD_MATERIAL` / `ZTRV_Solicitud_Material`) y
+`upper()` en el filtro arruina la estimación de cardinalidad de Postgres
+(una tabla de <1s se volvió >4 min) — documentado en
+`docs/schema/calidad-de-datos.md` y `docs/schema/warehouse.md`.
+
 ## Pendiente
 
 - [ ] **AU**: la muestra de 20 líneas es chica para separar señal de

@@ -197,6 +197,16 @@ De forma análoga, el estado **`AB` (ABIERTO) dejó de usarse después de 2024-1
 
 En `ZTRV_Presupuesto_Autorizacion_Documento` aparece al menos una fila con `Pad_Documento='{FOLIO}'` y `Pad_Operador='{OPERADOR}'` — literal, sin sustituir. Filtrar `Pad_Documento <> '{FOLIO}'` antes de cualquier `JOIN` o agregación.
 
+### `Pad_Tabla` tiene dos variantes de casing para la misma tabla
+
+`ZTRV_Presupuesto_Autorizacion_Documento.Pad_Tabla='ZTRV_Solicitud_Material'` (61,841 filas) y `'ZTRV_SOLICITUD_MATERIAL'` (25 filas) — mismo origen, casing distinto. Filtrar solo por uno de los dos pierde las 25 filas en silencio.
+
+⚠️ **No arreglar con `upper(Pad_Tabla) = '...'`.** Sin estadísticas sobre el resultado de la función, Postgres estimó ~520 filas en vez de ~62,000 (100x de error) y eligió *nested loop* para los joins siguientes — una tabla que debía tardar <1 segundo tardó **más de 4 minutos** (confirmado 2026-08-14 construyendo `int_solicitud_material_autorizacion` en `trivasa-bi-core`). Usar una lista explícita en su lugar:
+
+```sql
+WHERE Pad_Tabla IN ('ZTRV_SOLICITUD_MATERIAL', 'ZTRV_Solicitud_Material')
+```
+
 ---
 
 ## Campos que no son catálogos cerrados

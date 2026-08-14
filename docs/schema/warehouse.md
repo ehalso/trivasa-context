@@ -87,9 +87,24 @@ abril, más vieja que la de `.200`), así que `connection.py` (que apunta a
 
 ## Marts de dbt
 
-`dim_producto` (14,668) · `fct_compras` (62,762) · `fct_existencias` (1,516,397) · `fct_gastos_cfdi` (12,229) · `fct_ordenes_compra`
+`dim_producto` (14,668) · `fct_compras` (62,762) · `fct_existencias` (1,516,397) · `fct_gastos_cfdi` (12,229) · `fct_ordenes_compra` · `fct_solicitud_material_pipeline` (250,992, grano línea) · `fct_solicitud_material_autorizacion` (31,294, grano folio)
 
 > Hay un modelo `fct_movimientos.sql` en el repo **sin tabla materializada** en `analytics_marts` — revisar si falla o si nunca se corrió.
+
+Los dos marts de solicitudes tienen un dashboard de Lightdash publicado como código en `lightdash/dashboards/solicitudes-de-material-backlog-vivo.yml`:
+[Solicitudes de material · Backlog vivo](https://dash.frento.com.mx/projects/df98464b-9806-49f2-b5cb-2f99d47905ad/dashboards/6655b5bf-cfce-46de-97b1-07e87eeb4e48/view).
+Lectura de negocio (no metodología) en
+[hallazgos-de-negocio.md](../proyectos/notificacion-solicitud-material/hallazgos-de-negocio.md).
+
+⚠️ Gotcha nuevo (2026-08-14) al construir `int_solicitud_material_autorizacion`:
+`ZTRV_Presupuesto_Autorizacion_Documento.Pad_Tabla` tiene dos variantes de
+casing para la misma tabla (`ZTRV_SOLICITUD_MATERIAL`, 61,841 filas ·
+`ZTRV_Solicitud_Material`, 25 filas). Filtrar con `upper(pad_tabla) = ...`
+funciona pero **arruina la estimación de cardinalidad de Postgres** (sin
+estadísticas sobre la expresión, estimó ~520 filas en vez de ~62k, eligió
+nested loop para los joins siguientes, y la tabla tardó **>4 minutos** en
+vez de <1 segundo). Usar `pad_tabla IN ('ZTRV_SOLICITUD_MATERIAL', 'ZTRV_Solicitud_Material')`
+en su lugar.
 
 ## Fuente SAT (no MPRO)
 

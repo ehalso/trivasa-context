@@ -1,5 +1,11 @@
 # notificacion-solicitud-material
 
+> **¿Buscas qué dicen los datos, no cómo se construyó?** Ver
+> [hallazgos-de-negocio.md](hallazgos-de-negocio.md) — backlog vivo,
+> cuello de botella real de autorización, folios rechazados sin resolver,
+> y dónde se concentran las órdenes de compra atrasadas. Tablero:
+> [Solicitudes de material · Backlog vivo](https://dash.frento.com.mx/projects/df98464b-9806-49f2-b5cb-2f99d47905ad/dashboards/6655b5bf-cfce-46de-97b1-07e87eeb4e48/view).
+
 Reconstruir vía SQL el filtro que usa **"Control de Solicitudes de material
 v3"** (transacción `ZTRV098`, catálogo `EMPRESAS_2.Menus`) para cada una de
 sus pestañas (AU, AB, PR, APG, DISPONIBLE, AC RECHAZADO, OC SIN AU, PXC),
