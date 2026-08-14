@@ -38,6 +38,23 @@
   también son polimórficas (`_Tabla`/`_Documento`), mismo patrón que
   `ZTRV_Apartado` — integrado en `docs/schema/calidad-de-datos.md`.
 
+## 2026-08-13/14 — tablas raw subidas al warehouse
+
+Las 3 tablas usadas en la reconciliación de AB/PR/AU (`ZTRV_Apartado`,
+`ZTRV_Presupuesto_Autorizacion_Documento`, `Requisicion_Compra`) ya están
+en `raw.*` de Postgres, 100% reconciliadas contra `.207` en el momento de
+la carga (30,518 / 104,064 / 83,146 filas). Backfill inicial contra
+`TRIVASADB3` (que se descubrió cambió de IP `.200`→`.205` en esta misma
+sesión) + sync incremental contra `.207`. Las dos tablas de solicitudes
+ya quedaron enganchadas al cron existente de `load_solicitudes.run_incremental_207_all()`
+(06:50) y `requisicion_compra` al de `load_compras_inventario.run_incremental_207_all()`
+(06:30) — no hizo falta tocar la programación. Detalle completo,
+incluyendo el hallazgo de la IP y el pre-flight de seguridad del backfill,
+en [Warehouse](../../schema/warehouse.md#solicitudes-de-material) y
+[Servidores y bases](../../arquitectura/servidores-y-bases.md#2026-08-13-trivasadb3-cambio-de-ip-200-205).
+Código en `trivasa-bi-core` (`load_solicitudes.py`, `load_compras_inventario.py`,
+`connections/connection_205_trivasadb3.py`).
+
 ## Pendiente
 
 - [ ] **AU**: la muestra de 20 líneas es chica para separar señal de

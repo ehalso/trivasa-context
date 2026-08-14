@@ -195,9 +195,21 @@ vivo**: a un folio se le creó un apartado activo la misma tarde,
 
 ## Estado en el warehouse
 
-Las 7 tablas del dominio están replicadas a Postgres (`raw.ztrv_solicitud_*`, 974,866 filas, reconciliadas al 100 % contra `.207`). Ver [Warehouse](warehouse.md#solicitudes-de-material).
+9 tablas del dominio están replicadas a Postgres (`raw.ztrv_solicitud_*` +
+`raw.ztrv_apartado` + `raw.ztrv_presupuesto_autorizacion_documento`,
+1,109,448 filas, reconciliadas al 100 % contra `.207`). Ver
+[Warehouse](warehouse.md#solicitudes-de-material).
 
-Este dominio es **la excepción a la regla de backfillear desde `TRIVASADB3`**: `.200` es el staging de la app de solicitudes y escribe estas tablas a diario. Ver [Servidores y bases](../arquitectura/servidores-y-bases.md#gotcha-el-backfill-desde-200-puede-perder-datos-en-silencio).
+Las 7 tablas originales son **la excepción a la regla de backfillear desde
+`TRIVASADB3`**: en su momento, `.200` (hoy `.205`, ver
+[Servidores y bases](../arquitectura/servidores-y-bases.md#2026-08-13-trivasadb3-cambio-de-ip-200-205))
+era el staging de la app de solicitudes y escribía estas tablas a diario.
+Ver [Servidores y bases](../arquitectura/servidores-y-bases.md#gotcha-el-backfill-desde-200-puede-perder-datos-en-silencio).
+Las 2 tablas agregadas el 2026-08-13 (`ZTRV_Apartado`,
+`ZTRV_Presupuesto_Autorizacion_Documento`) **sí** se backfillearon desde
+`TRIVASADB3` (ahora `.205`) — el pre-flight no encontró la misma señal de
+escritura activa que forzó la excepción original, ver
+[Warehouse](warehouse.md#solicitudes-de-material) para el detalle.
 
 ## Reporte nativo equivalente
 

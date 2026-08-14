@@ -116,6 +116,14 @@ También se confirmó que el estado de `ZTRV_Solicitud_Material_Detalle` varía
 por línea, independiente de la cabecera — ver
 [Calidad de datos](../../schema/calidad-de-datos.md#el-estado-de-detalle-no-hereda-el-de-cabecera-ztrv_solicitud_material_detalle).
 
+## Tablas raw subidas al warehouse
+
+`ZTRV_Apartado`, `ZTRV_Presupuesto_Autorizacion_Documento` y
+`Requisicion_Compra` (las 3 tablas clave de esta reconciliación) ya viven
+en `raw.*` de Postgres, 100% reconciliadas contra `.207`. De paso se
+encontró que `TRIVASADB3` cambió de IP (`.200` → `.205`). Detalle en
+[PROGRESS.md](PROGRESS.md) y [Warehouse](../../schema/warehouse.md#solicitudes-de-material).
+
 ## Ver también
 
 - [PROGRESS.md](PROGRESS.md) — estado vivo.

@@ -39,24 +39,51 @@ La lección que fijó el criterio: `reorden` estaba en `merge` y Postgres acumul
 | `existencia` | 84,857 | `Existencia` | 5 columnas | `Fecha_Ult_Modif` |
 | `compra_encabezado` | 69,297 | `Compra_Encabezado` | `(co_folio)` | `Fecha_Ult_Modif` |
 | `producto` | 27,462 | `Producto` | `(pr_cve_producto)` | `Fecha_Ult_Modif` |
+| `requisicion_compra` | 83,146 | `Requisicion_Compra` | `(rc_folio, rc_id)` | `Fecha_Ult_Modif` |
 
 `comprobante_digital` cubre 2012-01-10 en adelante, con 14 valores de `cd_tabla` (`FACTURA`, `TRASLADO`, `GASTO_REGISTRO`, `NOMINA`, `COMPROBANTE_PAGO`, `COMPRA`, `CHEQUE`, `NOTA_CREDITO`, `CUENTA_X_PAGAR`, `COMPRA_INDIRECTO`, `NOTA_CREDITO_PROVEEDOR`, `ANTICIPO_CXP`, `CONSTANCIA_RETENCION`, `CONTABILIDAD_ELECTRONICA`).
 
 ## Solicitudes de material
 
-7 tablas, **974,866 filas**, reconciliadas al 100 % contra `.207`. Backfill ~3 min, incremental diario ~1 min.
+9 tablas, **1,109,448 filas**, reconciliadas al 100 % contra `.207`. Backfill ~3 min, incremental diario ~1 min.
 
 | Tabla | Filas | Modo | Clave / cursor |
 |---|---:|---|---|
 | `ztrv_estado_solicitud` | 310,661 | replace | sin PK ni cursor |
 | `ztrv_solicitud_material_detalle` | 250,987 | merge incremental | PK `Sm_Folio, Sm_ID` · `Fecha_Ult_Modif` |
 | `ztrv_solicitud_materia_documento` | 189,107 | replace | sin PK ni cursor |
+| `ztrv_presupuesto_autorizacion_documento` | 104,064 | merge incremental | PK `Pad_Tabla, Pad_Documento, Pad_Estado, Pad_Fecha` · `Pad_Fecha` (sin `Fecha_Ult_Modif`) |
 | `ztrv_solicitud_material` | 114,459 | merge incremental | PK `Sm_Folio` · `Fecha_Ult_Modif` |
 | `ztrv_solicitu_material_producto` | 74,359 | replace | PK ok, sin cursor |
+| `ztrv_apartado` | 30,518 | merge incremental | PK `Ap_Folio, Ap_ID` · `Fecha_Ult_Modif` |
 | `ztrv_solicitud_material_ceco` | 35,123 | replace | PK ok, sin cursor |
 | `ztrv_solicitud_agenda_logistica` | 170 | replace | cursor 96 % NULL |
 
-Solo 2 de 7 tienen cursor usable; las demás son tablas hijas puras de `Sm_Folio` sin columnas de auditoría. Ver [Calidad de datos](calidad-de-datos.md#cursores-incrementales).
+Solo 4 de 9 tienen cursor usable; las demás son tablas hijas puras de `Sm_Folio` sin columnas de auditoría. Ver [Calidad de datos](calidad-de-datos.md#cursores-incrementales).
+
+**2026-08-13**: se agregaron `ztrv_apartado`, `ztrv_presupuesto_autorizacion_documento`
+(en `load_solicitudes.py`) y `requisicion_compra` (arriba, en
+`load_compras_inventario.py`) — tablas usadas en la reconciliación de
+[notificacion-solicitud-material](../proyectos/notificacion-solicitud-material/index.md).
+A diferencia de las 7 tablas originales de este dominio (que se saltan el
+backfill desde `TRIVASADB3` por un problema de escritura activa detectado
+en su momento — ver `load_solicitudes.py:main()`), estas 3 sí se
+backfillearon desde `TRIVASADB3` siguiendo el patrón estándar del runbook:
+pre-flight confirmó que la copia actual no tiene esa señal de escritura
+activa (`MAX(Fecha_Ult_Modif)`/`MAX(Pad_Fecha)` de las 3 caen en la misma
+ventana de ~3h, señal de snapshot restaurado una sola vez).
+
+**Importante — la IP de `TRIVASADB3` cambió de `.200` a `.205`.** Mismo
+servidor físico, misma base, solo se movió. Verificado empíricamente
+(2026-08-13): `.205` trae `ZTRV_Solicitud_Material` ~1 día más fresco que
+`.200` (114,501 filas / `MAX(Fecha_Ult_Modif)` 2026-08-11 vs 113,758 /
+2026-08-10) — `.200` quedó como copia congelada, no usar para nada nuevo.
+`connections/connection_205_trivasadb3.py` en `trivasa-bi-core` ya
+actualizado. **Ojo:** esto es específico a `TRIVASADB3` — se confirmó que
+`TRIVASADB` (sin el 3, la base ya marcada como obsoleta en el ADR de
+`.200` vs `.200/TRIVASADB3`) tiene el patrón *inverso* en `.205` (copia de
+abril, más vieja que la de `.200`), así que `connection.py` (que apunta a
+`TRIVASADB` sin el 3) **no se tocó** — sigue en `.200` a propósito.
 
 ## Marts de dbt
 
@@ -77,9 +104,9 @@ Solo 2 de 7 tienen cursor usable; las demás son tablas hijas puras de `Sm_Folio
 | 05:00 | `cargar_cfdi_recibidos.py` → `raw_sat.cfdi_recibidos` |
 | 06:00 | `load_comprobante_digital.run_incremental_207()` |
 | 06:15 | `load_reorden.py` (reorden + producto + 6 catálogos) |
-| 06:30 | `load_compras_inventario.run_incremental_207_all()` |
+| 06:30 | `load_compras_inventario.run_incremental_207_all()` (incluye `requisicion_compra` desde 2026-08-13) |
 | 06:45 | `load_movimiento.run_incremental_207()` |
-| 06:50 | `load_solicitudes.run_incremental_207_all()` |
+| 06:50 | `load_solicitudes.run_incremental_207_all()` (incluye `ztrv_apartado`/`ztrv_presupuesto_autorizacion_documento` desde 2026-08-13) |
 | 07:00 | `check_raw_freshness.py` |
 
 > Los diagramas ER de estas tablas y sus relaciones verificadas están en [Modelos de datos de `raw`](modelos-raw.md).

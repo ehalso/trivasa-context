@@ -2,14 +2,17 @@
 
 > Qué servidor es cuál y qué base vive en cada uno. **Leer antes de escribir cualquier query** — es el error más caro de cometer, porque una consulta contra la base equivocada devuelve resultados plausibles pero falsos.
 >
-> Verificado 2026-08-10 contra los servidores en vivo.
+> Verificado 2026-08-10 contra los servidores en vivo. **Actualizado
+> 2026-08-13: `TRIVASADB3` se movió de `.200` a `.205`** — ver nota al
+> final de "Cuál usar para qué".
 
 ## Mapa de servidores
 
 | Host | Rol | Bases relevantes |
 |---|---|---|
 | **`192.168.117.207`** | **Producción — sistema de registro** | `TRIVASADB` ← ERP vivo · `EMPRESAS_2` · `MPROARCHIVOS`, `COCINADB`, `MACIZO`, `TRIVASA2017` |
-| **`192.168.117.200`** (`SVR-DEV`) | Copias restauradas + staging | `TRIVASADB3` ← exploración · `TRIVASADB`, `TRIVASADB2` (copias viejas) · `EMPRESAS_2` (control, activa) · `EMPRESAS_3` (copia vieja) · `MACIZO` · `ReportServer` (SSRS) |
+| **`192.168.117.205`** (`SVR-DEV`, aquí desde 2026-08-13) | Copias restauradas + staging | `TRIVASADB3` ← exploración, ahora aquí · `EMPRESAS_2`, `TRIVASADB`, `TRIVASADB2`, `MACIZO`, `MACIZO2`, `MPROARCHIVOS`, `TRIVASA2017`, `COCINADB`, `ReportServer` (SSRS) |
+| **`192.168.117.200`** | Copia de `TRIVASADB3` **congelada** (dejó de recibir refresh, ver nota) — no usar para nada nuevo. `TRIVASADB` (sin el 3) sigue viva aquí, ver más abajo. | `TRIVASADB3` (vieja), `TRIVASADB`, `TRIVASADB2`, `EMPRESAS_2`, `EMPRESAS_3` |
 | **`192.168.117.204`** | Origen de los primeros backfills de dlt | `TRIVASADB` |
 | **`192.168.117.211`** | Share `SincronizarXml` — XMLs CFDI del SAT | (sistema de archivos) |
 
@@ -19,10 +22,36 @@ Motor: **SQL Server 2016 SP3-OD (13.0.6404.1)** sobre Windows Server 2022.
 
 | Necesidad | Base |
 |---|---|
-| Explorar, perfilar esquema, backfill histórico | `.200/TRIVASADB3` |
+| Explorar, perfilar esquema, backfill histórico | `.205/TRIVASADB3` |
 | Cifras oficiales, incrementales diarios, cualquier número que vaya a un reporte | `.207/TRIVASADB` |
 
-Conexión **default** de `trivasa-bi-core/connections/`: `.200/TRIVASADB3`. No cambiar a `.207` salvo pedido explícito.
+Conexión **default** de `trivasa-bi-core/connections/`: `.205/TRIVASADB3` (`connection_205_trivasadb3.py`). No cambiar a `.207` salvo pedido explícito.
+
+### 2026-08-13 — `TRIVASADB3` cambió de IP: `.200` → `.205`
+
+Confirmado por evidencia de datos, no por aviso de infraestructura: `.205`
+responde con el mismo catálogo de bases que `.200` tenía documentado
+arriba (todo lo esperable de `SVR-DEV`), y su copia de `TRIVASADB3` está
+**más fresca** que la que sigue en `.200`:
+
+| Señal (`ZTRV_Solicitud_Material`) | `.200` | `.205` |
+|---|---|---|
+| `MAX(Fecha_Ult_Modif)` | 2026-08-10 15:58 | 2026-08-11 21:11 |
+| Filas | 113,758 | 114,501 |
+
+Lectura más probable: `.200` es ahora una copia **congelada** de `SVR-DEV`
+que dejó de recibir el refresh periódico (sección de abajo), mientras el
+servidor real sigue operando en `.205`. No confirmado con infraestructura.
+
+⚠️ **Es específico a `TRIVASADB3`.** Para `TRIVASADB` (sin el 3, ya
+marcada obsoleta más abajo) el patrón es el **inverso**: `.200/TRIVASADB`
+sigue más fresca (`MAX(Fecha_Ult_Modif)` de `Consumo_Interno` 2026-08-12)
+que `.205/TRIVASADB` (2026-04-24, copia vieja sin refrescar).
+`connections/connection.py` (apunta a esa base) se dejó intacto en
+`.200` a propósito — no asumir que todo el host se comporta igual para
+todas sus bases. **Sin verificar todavía:** si el share CIFS de
+`D:\BACKUP`/`D:\DATOS` (sección "Respaldos" más abajo) también se movió
+a `.205`, o si sigue sirviéndose desde `.200`.
 
 ## `TRIVASADB3` no es producción
 
