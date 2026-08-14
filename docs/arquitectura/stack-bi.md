@@ -67,6 +67,16 @@ Tolerancia antes de marcar `fail`: `max(5, 0.1 % del conteo origen)` — producc
 
 Sustituyó a `dvt-checks/`, que hacía column+schema checks con un contenedor Docker propio y resultó más pesado de lo necesario. No hay canal de notificación externo (decisión 2026-08-10: no vale la pena un bot dedicado solo para esto).
 
+## `torep` — capturar output de scripts a HTML navegable
+
+Helper personal en ctunlinux (no es parte de `trivasa-bi-core`, vive suelto en el home de `ealcocer`) para no perder el output de scripts Python de exploración/diagnóstico — prints, tracebacks, tablas de `rich` — que de otro modo solo quedan en la terminal.
+
+- **Ejecutable:** `~/torep/torep` (bash). `~/torep` está en el `PATH` vía `~/.bashrc` (`export PATH="$HOME/torep:$PATH"`).
+- **Uso:** `torep script.py` — corre el script con `python3`, captura la sesión completa de terminal con `script`, la convierte a HTML con `aha --black`, y la agrega a un reporte acumulado por carpeta: `~/torep-www/<nombre-carpeta-del-script>.html`. Scripts de un mismo proyecto se van apilando en el mismo HTML, cada corrida con su propio bloque con encabezado `nombre.py exit N`.
+- **Reportes:** `~/torep-www/`, servido en `http://<ip-de-ctunlinux>:8000/` con `python3 -m http.server 8000 --directory ~/torep-www`, levantado a mano (`nohup` + `disown`, no hay unit de systemd todavía). Un `index.html` autogenerado en cada corrida lista los proyectos, ordenable por nombre o última corrida.
+
+> ⚠️ **Gotcha (2026-08-14): `script` no propaga el exit code sin `-e`.** La primera versión usaba `script -qc "... python3 script.py" archivo` y leía `$?` después — pero `script` sin la flag `-e`/`--return` siempre devuelve el exit status de sí mismo (típicamente 0), no el del proceso hijo. Resultado: **todos los reportes decían `exit 0` aunque el script hubiera fallado con traceback y todo.** Fix: `script -qec "..." archivo` (flag `-e` agregada). Verificado corriendo un script con `sys.exit(1)` a propósito — antes de `-e` reportaba `exit 0`, después `exit 1`. Si se reescribe `torep`, no perder esta flag.
+
 ## Acceso remoto
 
 - **Cloudflare Tunnel** (`cloudflared`) — credenciales en `~/.cloudflared/` y `/etc/cloudflared/`. Ingress (`/etc/cloudflared/config.yml`), un hostname por servicio:
