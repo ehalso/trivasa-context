@@ -72,10 +72,21 @@ Sustituyó a `dvt-checks/`, que hacía column+schema checks con un contenedor Do
 Helper personal en ctunlinux (no es parte de `trivasa-bi-core`, vive suelto en el home de `ealcocer`) para no perder el output de scripts Python de exploración/diagnóstico — prints, tracebacks, tablas de `rich` — que de otro modo solo quedan en la terminal.
 
 - **Ejecutable:** `~/torep/torep` (bash). `~/torep` está en el `PATH` vía `~/.bashrc` (`export PATH="$HOME/torep:$PATH"`).
-- **Uso:** `torep script.py` — corre el script con `python3`, captura la sesión completa de terminal con `script`, la convierte a HTML con `aha --black`, y la agrega a un reporte acumulado por carpeta: `~/torep-www/<nombre-carpeta-del-script>.html`. Scripts de un mismo proyecto se van apilando en el mismo HTML, cada corrida con su propio bloque con encabezado `nombre.py exit N`.
+- **Uso:** `torep archivo` — detecta la extensión: `.py` corre con `python3`, `.sql` corre directo con `duckdb -f` (CLI puro, sin envoltura de Python — ver sección de DuckDB abajo). Cualquiera de los dos casos captura la sesión completa de terminal con `script`, la convierte a HTML con `aha --black`, y la agrega a un reporte acumulado por carpeta: `~/torep-www/<nombre-carpeta-del-script>.html`. Archivos de un mismo proyecto se van apilando en el mismo HTML, cada corrida con su propio bloque con encabezado `nombre.ext exit N`.
 - **Reportes:** `~/torep-www/`, servido en `http://<ip-de-ctunlinux>:8000/` con `python3 -m http.server 8000 --directory ~/torep-www`, levantado a mano (`nohup` + `disown`, no hay unit de systemd todavía). Un `index.html` autogenerado en cada corrida lista los proyectos, ordenable por nombre o última corrida.
 
 > ⚠️ **Gotcha (2026-08-14): `script` no propaga el exit code sin `-e`.** La primera versión usaba `script -qc "... python3 script.py" archivo` y leía `$?` después — pero `script` sin la flag `-e`/`--return` siempre devuelve el exit status de sí mismo (típicamente 0), no el del proceso hijo. Resultado: **todos los reportes decían `exit 0` aunque el script hubiera fallado con traceback y todo.** Fix: `script -qec "..." archivo` (flag `-e` agregada). Verificado corriendo un script con `sys.exit(1)` a propósito — antes de `-e` reportaba `exit 0`, después `exit 1`. Si se reescribe `torep`, no perder esta flag.
+
+> ⚠️ **Gotcha (2026-08-14): `duckdb` se cuelga bajo la pty de `script` sin `-light-mode`.** Sin flag explícito de tema, `duckdb` auto-detecta si la terminal es clara u oscura mandando una consulta OSC de color de fondo y esperando la respuesta del emulador. Bajo la pty que crea `script` para `torep` no hay emulador real del otro lado que conteste — la consulta se queda colgada para siempre (visto primero corriendo un script que probaba los 18 modos de salida del CLI: se colgó justo al entrar al modo `column`, con result sets grandes). Fix: `torep` invoca `duckdb -light-mode -cmd '.pager off' -f archivo.sql` para `.sql` — la flag evita la auto-detección, y `-cmd '.pager off'` evita que un result set grande dispare el paginador (mismo problema, mismo síntoma: esperar input de una terminal que no está ahí).
+
+## DuckDB CLI + conector MS SQL Server
+
+Instalado 2026-08-14 para exploración rápida vía SQL directo contra SQL Server, sin pasar por Python/pandas/pymssql.
+
+- **Instalación:** `curl -fsSL https://install.duckdb.org | sh` — deja el binario en `~/.duckdb/cli/<version>/duckdb` con symlink `latest`, y crea otro symlink en `~/.local/bin/duckdb` (ya en `PATH`).
+- **Conector MS SQL Server:** no es built-in — es la extensión community `mssql` (`INSTALL mssql FROM community; LOAD mssql;`). Ojo: **no se llama `sqlserver`** ni `mssql_scanner` (esos nombres no existen en el repo community, dan 404).
+- **Conexión:** `ATTACH 'Server=<host>,<puerto>;Database=<db>;User Id=<user>;Password=<pass>;TrustServerCertificate=yes' AS alias (TYPE mssql);` — el formato de connection string es distinto al de pymssql/sqlalchemy (`Server=host,puerto` con coma, no `host:puerto`). Probado contra `.205/TRIVASADB3` con las credenciales de `trivasa-bi-core/connections/connection_205_trivasadb3.py`. Tras el `ATTACH`, las tablas se referencian como `alias.dbo.NombreTabla`.
+- Ver los dos gotchas de `-light-mode`/`.pager off` arriba — aplican a cualquier uso interactivo o via `torep`, no solo a `.sql` corridos por el helper.
 
 ## Acceso remoto
 
