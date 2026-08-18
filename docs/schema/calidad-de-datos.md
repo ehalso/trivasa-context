@@ -2,7 +2,7 @@
 
 > Todo lo de aquí se probó con queries contra la base. **No re-descubrirlo dos veces**: si algo cambia, actualizar este archivo.
 >
-> Consolidado de exploraciones 2026-07-22 a 2026-08-13.
+> Consolidado de exploraciones 2026-07-22 a 2026-08-18.
 
 ## Lo que está bien
 
@@ -178,6 +178,78 @@ AND UPPER(pl.Pl_Comentario) NOT LIKE 'CUENTA ORDEN%'
 ```
 
 Ambos filtros dan el **mismo total exacto** ($6,388,627.47, enero 2026) — confirman que identifican el mismo conjunto de líneas por caminos distintos. Resultado: 99.12% de conciliación (2,944/2,970 folios, enero 2026); los 26 folios restantes no tienen ninguna póliza de gasto real (solo la de inventario) — hueco de datos real, no de filtro. Detalle completo en [layout-gastos](../proyectos/layout-gastos/index.md#consumo_interno--antes-excluido-ahora-conciliado-2026-08-18).
+
+---
+
+## Personalizaciones `ZTRV_Orden_Compra_*` sin uso real (o de otro propósito)
+
+Existen tres tablas personalizadas con nombre que sugiere ser catálogo/detalle de Orden de Compra. **Ninguna es la fuente correcta** para consultas de negocio sobre OC — esa sigue siendo `Orden_Compra` (sin prefijo, del ERP estándar), que **ya es tabla a nivel línea** (trae `Pr_Cve_Producto` como columna propia, confirmado vía el `.asp` nativo de `RPCO001`) — no hace falta ni existe un `Orden_Compra_Detalle` separado.
+
+| Tabla | Filas (`.207`) | Qué es en realidad |
+|---|---:|---|
+| `ZTRV_Orden_Compra_Requisicion` | **0** | Vacía. Aunque tiene columnas que sugieren ser el puente correcto `Orden_Compra ↔ Requisicion_Compra` (`Oc_Folio`, `Rc_Folio`, `Rc_Id`), no tiene ninguna fila cargada. |
+| `ZTRV_Orden_Compra_Requisicion_Ceco` | **0** | Vacía también. |
+| `ZTRV_Orden_Compra_Ceco` | 20,502 | **Sí tiene datos**, pero es reparto por centro de costo a nivel línea (`Oc_Folio`, `Oc_Id`, `Cc_Cve_Centro_Costo`, `Ocrc_Importe`, `Ocrc_Porcentaje`). **No tiene columna de fecha propia** — para filtrar por periodo hay que unir contra `Orden_Compra.Oc_Fecha`. Fan-out esperado: múltiples filas por folio (una por línea × centro de costo). |
+
+Fácil confundirlas con el puente falso `Rc_ID` de `Orden_Compra` (ver [Joins que parecen obvios pero son falsos](#joins-que-parecen-obvios-pero-son-falsos)) y asumir que alguna resuelve el enlace — validar con `COUNT(*)` antes de usarlas.
+
+### Filtro validado para "Órdenes de Compra activas"
+
+Confirmado por reconciliación contra el reporte nativo `RPCO001` (vía Metabase): 310 folios vs 309 esperados, diferencia de 1 atribuible a timing del corte ("hasta hoy").
+
+```sql
+SELECT COUNT(DISTINCT Oc_Folio) AS n
+FROM Orden_Compra
+WHERE Es_Cve_Estado <> 'CA'
+  AND Oc_Fecha >= '20260801'
+  AND Oc_Fecha < '20260819';
+```
+
+- **`Es_Cve_Estado <> 'CA'`**, no `= 'AC'` — consistente con la regla general de [Estados](#estados), y confirmado específicamente para esta tabla vía la lógica real del `.asp` de `RPCO001`.
+- El conteo de negocio es **por folio distinto** (`COUNT(DISTINCT Oc_Folio)`), no por filas crudas — como `Orden_Compra` es a nivel línea, contar filas sobreestima el número de "órdenes".
+- No hizo falta filtrar por `Empresa`/`Sucursal`/`Comprador` para reconciliar este número — si una pregunta de negocio distinta lo requiere, no está validado aquí.
+
+`RPCO001` es patrón A ([Reportes nativos](reportes-nativos.md)) — el `.asp` completo trae más columnas y lógica (join contra `Compra` para "entregado vs ordenado", moneda, tipo de cambio) no validadas en esta sesión por venir el archivo truncado al copiarlo. Para replicar el reporte completo, volver a extraer `RPCO001.asp` íntegro y confirmar en particular las condiciones exactas del `LEFT JOIN Compra` (columnas de color/talla no confirmadas contra el esquema real).
+
+---
+
+## Comparar fechas con separadores puede invertir día/mes (`DATEFORMAT`)
+
+Una comparación aparentemente inofensiva contra una columna `datetime`:
+
+```sql
+WHERE Oc_Fecha >= '2026-08-01' AND Oc_Fecha < '2026-08-19'
+```
+
+puede fallar con un error de conversión, o **peor todavía, puede NO fallar y devolver resultados silenciosamente incorrectos** si el día del mes es ≤ 12.
+
+**Causa raíz:** con `@@LANGUAGE = 'Español'` (default de sesión en `.207/TRIVASADB`, collation `Modern_Spanish_CI_AS`), el `DATEFORMAT` de sesión es **`dmy`** (día-mes-año), no `mdy` — el que casi todos asumen implícitamente al escribir `'YYYY-MM-DD'`. Confirmarlo en cualquier sesión sospechosa:
+
+```sql
+SELECT
+    @@LANGUAGE AS idioma_sesion,
+    @@DATEFIRST AS datefirst,
+    (SELECT dateformat FROM sys.syslanguages WHERE langid = @@LANGID) AS dateformat_default_idioma;
+```
+
+Con `dmy` activo, un literal como `'2026-08-19'` se interpreta con los segmentos de día y mes potencialmente invertidos:
+
+- **Día > 12** (ej. `'2026-08-19'`, día=19): no existe "mes 19" → error `22007` explícito. Molesto, pero al menos avisa.
+- **Día ≤ 12** (ej. `'2026-08-01'`, día=01): el intercambio día/mes **no truena** — ambos números son meses válidos — y la query corre "exitosamente" pero filtrando por la fecha equivocada, **sin ningún error visible**. Este es el caso peligroso.
+
+**Regla:** usar siempre el formato `'YYYYMMDD'` (sin separadores) al comparar contra columnas `datetime`/`date`. Es el único literal de fecha que SQL Server interpreta de forma inequívoca sin importar `DATEFORMAT`/`LANGUAGE` de la sesión — garantía del estándar, no convención de este proyecto.
+
+```sql
+-- ❌ Riesgoso: depende del DATEFORMAT de la sesión
+WHERE Oc_Fecha >= '2026-08-01' AND Oc_Fecha < '2026-08-19'
+
+-- ✅ Seguro: inequívoco en cualquier sesión
+WHERE Oc_Fecha >= '20260801' AND Oc_Fecha < '20260819'
+```
+
+Nota sobre herramientas de exploración ad-hoc (Harlequin/hsql): su adaptador ODBC no acepta hooks de "SQL de inicialización", solo el connection string. Se puede forzar `Language=us_english;` en la cadena de conexión (da `DATEFORMAT mdy`, a costa de mensajes de error del servidor en inglés) — se evaluó y **se descartó** a favor de la regla `'YYYYMMDD'` de arriba, más robusta porque no depende de la configuración de la conexión en turno.
+
+**Ámbito confirmado:** solo `.207/TRIVASADB`. No se verificó si `.200`/`.205/TRIVASADB3` tienen el mismo `@@LANGUAGE` de sesión por default — revisar antes de asumir que aplica igual ahí.
 
 ---
 
