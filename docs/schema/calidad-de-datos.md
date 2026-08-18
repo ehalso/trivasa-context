@@ -138,6 +138,47 @@ INNER JOIN ZTRV_Solicitud_Material sm ON sm.Sm_Folio = ap.Sm_Folio   -- correcto
 
 `ZTRV_Apartado.Es_Cve_Estado` es un campo de estado **propio** de la tabla, no relacionado con el `Es_Cve_Estado` de `ZTRV_Solicitud_Material` ni el de su detalle. Valores observados: `SUR` (surtido, mayoritario), `CA` (cancelado), `CE` (cerrado), `AC` (activo) — para apartados vigentes, filtrar `ap.Es_Cve_Estado = 'AC'`. Columnas relevantes adicionales: `Ap_Cantidad_Control_1` (cantidad apartada), `Ap_Consumido_Control_1` (cantidad ya consumida) — en la muestra explorada, para folios con `Es_Cve_Estado='AC'`, `Ap_Consumido_Control_1` siempre fue 0 (no confirmado que sea invariante).
 
+### ❌ `Poliza_Detalle.Pd_Referencia = Gr_Folio` sin aislar la póliza real en `CONSUMO_INTERNO`
+
+Exploración 2026-08-18 ([layout-gastos](../proyectos/layout-gastos/index.md)). `Poliza_Detalle.Pd_Referencia` es el único campo que liga una línea de póliza de vuelta a `Gasto_Registro`, pero es ambiguo de dos formas distintas:
+
+1. **Colisiona entre años**: es solo el número de folio, sin año ni sucursal — 3,179 referencias distintas colisionan entre 2020-2026 en toda la tabla. Por eso nunca se hace `GROUP BY Pd_Referencia` global sin pasar antes por `Poliza_Control` (`Pc_Documento = gr.Gr_Folio`) fila por fila.
+2. **`CONSUMO_INTERNO` genera DOS pólizas paralelas por folio**, bajo el mismo `Pc_Documento`, cada una con su propia línea `Pd_Referencia = Gr_Folio`:
+   - movimiento de inventario — cuenta `10500.012.003` ("Salida Por Consumo Interno"), raíz de grupo contable `H` (Cuentas de Orden/memo).
+   - reconocimiento de gasto real — cuenta variable (ej. `6200.001.003.001` "Combustible", o `2120.010.xxx.002` "Gastos A Cuenta De Costo Estandar"), raíz `F` (Gastos) o sin grupo con esa descripción.
+
+Un join que suma el Cargo de ambas líneas (`SUM(Pd_Importe) WHERE Pd_Tipo=1 AND Pd_Referencia=Gr_Folio`, sin más filtro) da un Cargo total ≈ **2x** el importe nativo del folio, con Abono siempre en 0 — no es partida doble normal, es la duplicación de las dos pólizas. Confirmado con folio real:
+
+```
+folio 05-0174493, importe nativo $179.47
+  Pl_Folio 0000472906 -- Cargo 6200.001.003.001 "Combustible" $179.47        <- gasto real
+  Pl_Folio 0000472693 -- Cargo 10500.012.003 "Salida Por Consumo Interno" $179.47  <- inventario, memo
+```
+
+### ✅ Aislar la póliza de gasto real (dos formas, mismo resultado exacto)
+
+**Por cuenta contable** (mismo filtro que ya usaba el caso especial 3 de la conciliación Cargo/Abono para Abono en otros orígenes, aplicado aquí también a Cargo):
+
+```sql
+SUM(CASE WHEN pd.Pd_Tipo = 1 AND (
+        ga.raiz = 'F'
+     OR (ga.raiz IS NULL AND LEFT(pd.Cc_Cve_Cuenta_Contable, 1) = '6')
+     OR (ga.raiz IS NULL AND LOWER(cc.Cc_Descripcion) LIKE '%gastos a cuenta de costo estandar%')
+    ) THEN pd.Pd_Importe ELSE 0 END)
+```
+
+**Por `Poliza.Pl_Comentario`** (validado antes en el proyecto `consumo_interno_trazabilidad` para el mismo problema — más robusto, no depende de adivinar por código de cuenta):
+
+```sql
+AND pd.Pd_Tipo = 1
+AND UPPER(pl.Pl_Comentario) LIKE '%CONSUMO INT%'
+AND UPPER(pl.Pl_Comentario) NOT LIKE 'CUENTAS DE ORDEN%'
+AND UPPER(pl.Pl_Comentario) NOT LIKE 'CTS ORDEN%'
+AND UPPER(pl.Pl_Comentario) NOT LIKE 'CUENTA ORDEN%'
+```
+
+Ambos filtros dan el **mismo total exacto** ($6,388,627.47, enero 2026) — confirman que identifican el mismo conjunto de líneas por caminos distintos. Resultado: 99.12% de conciliación (2,944/2,970 folios, enero 2026); los 26 folios restantes no tienen ninguna póliza de gasto real (solo la de inventario) — hueco de datos real, no de filtro. Detalle completo en [layout-gastos](../proyectos/layout-gastos/index.md#consumo_interno--antes-excluido-ahora-conciliado-2026-08-18).
+
 ---
 
 ## Fechas sentinela — no son NULL
