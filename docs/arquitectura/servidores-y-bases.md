@@ -138,3 +138,31 @@ Montados en ctunlinux por CIFS, **solo lectura**, usuario `bi_readonly`:
 | `C:\DATOS`, `C:\XML_PORTAL` | Vacías desde la vista `bi_readonly` |
 
 Los `.sqlaudit` son de una auditoría **`Audit_Delete_DML`** (rastro de borrados). Existe a nivel servidor pero **sin especificación ligada a `TRIVASADB3`**: hoy no captura nada de esta base. Los borrados físicos no dejan rastro; las bajas lógicas sí (`Fecha_Baja` / `Es_Cve_Estado`).
+
+### Cómo se configura el acceso (para replicar en otro host)
+
+Requiere: paquete `cifs-utils`, y conectividad a `192.168.117.200` — misma
+LAN física, o vía NetBird (la red `192.168.117.0/24` ya está anunciada ahí).
+
+1. `apt install cifs-utils`
+2. Crear `/root/.smbcreds-200` (permisos `600`, dueño root):
+   ```
+   username=bi_readonly
+   password=<SMB_200_PASSWORD>
+   domain=WORKGROUP
+   ```
+   Credenciales guardadas en Infisical, proyecto `secret-management`
+   (`secrets.ehas.uk`), entorno `dev`, raíz `/`: `SMB_200_HOST`,
+   `SMB_200_USERNAME`, `SMB_200_PASSWORD`, `SMB_200_DOMAIN`,
+   `SMB_200_SHARE_C`, `SMB_200_SHARE_D`.
+3. Agregar a `/etc/fstab`:
+   ```
+   //192.168.117.200/C_readonly  /mnt/win200_c  cifs  credentials=/root/.smbcreds-200,ro,uid=<user>,gid=<user>,iocharset=utf8,vers=3.0,file_mode=0444,dir_mode=0555,_netdev  0  0
+   //192.168.117.200/D_readonly  /mnt/win200_d  cifs  credentials=/root/.smbcreds-200,ro,uid=<user>,gid=<user>,iocharset=utf8,vers=3.0,file_mode=0444,dir_mode=0555,_netdev  0  0
+   ```
+4. `mount -a`
+
+En ctunlinux la conectividad es por LAN física (`192.168.117.0/24` directo
+en `ens18`), no por el túnel NetBird activo en el host — aunque NetBird
+también anuncia esa red, así que un host remoto sin acceso a la LAN física
+puede llegar por ahí en su lugar.
