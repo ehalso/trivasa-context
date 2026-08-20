@@ -6,7 +6,10 @@
 > Código real verificado en `trivasa-bi-core` el 2026-08-20 — los nombres de
 > función y patrones de este runbook son los que ya usan
 > `dlt/load_reorden.py`, `dlt/load_solicitudes.py` y
-> `dlt/load_compras_inventario.py`, no una convención inventada.
+> `dlt/load_compras_inventario.py`, no una convención inventada. Reemplaza
+> a un runbook previo sin curar en `~/por_ordenar/docs/dlt_pipelines_runbook.md`
+> (ctunlinux) — ese seguía el patrón manual `pymssql.connect()` y el backfill
+> contra `.200`, ambos ya obsoletos; puede borrarse.
 
 Sigue los pasos en orden. Cada uno da por hecho que el anterior ya quedó
 verificado — no hay atajos seguros, sobre todo entre el paso 2 (backfill) y
@@ -41,7 +44,14 @@ verifica con una query, no se adivina.
 
 Ver el detalle completo en
 [Decisión: merge vs. replace](../decisions/merge-vs-replace.md); aquí solo
-el checklist accionable. Corre las tres contra `.205/TRIVASADB3`:
+el checklist accionable. Corre las tres contra `.205/TRIVASADB3` —
+**y repite la 1 y la 2 también contra `.207`**, no asumas que lo que es
+cierto en la copia lo es también en producción. Es el patrón que ya siguió
+`load_solicitudes.py` para `ZTRV_Apartado` y
+`ZTRV_Presupuesto_Autorizacion_Documento` ("0 duplicados de PK en `.205` y
+en `.207`") — una tabla que pasa el pre-flight en `.205` pero falla en
+`.207` (o viceversa) es justo el caso que este doble check existe para
+atrapar antes de que llegue a producción.
 
 **1. ¿La PK es realmente única?**
 
@@ -49,7 +59,7 @@ el checklist accionable. Corre las tres contra `.205/TRIVASADB3`:
 SELECT COUNT(*) FROM (
   SELECT <cols_pk> FROM <Tabla> GROUP BY <cols_pk> HAVING COUNT(*) > 1
 ) x;
--- debe dar 0
+-- debe dar 0 -- correr en .205 y en .207
 ```
 
 **2. ¿El cursor incremental está poblado de verdad?**
@@ -58,7 +68,7 @@ SELECT COUNT(*) FROM (
 SELECT COUNT(*) total,
        SUM(CASE WHEN Fecha_Ult_Modif IS NULL THEN 1 ELSE 0 END) nulos
 FROM <Tabla>;
--- si "nulos" es una fracción grande del total, el cursor no sirve
+-- si "nulos" es una fracción grande del total, el cursor no sirve -- correr en .205 y en .207
 ```
 
 **3. ¿`.205` escribe esta tabla por su cuenta?** (rompería el backfill en
@@ -73,7 +83,11 @@ Si la fecha es de **hoy** en vez de la fecha del último restore
 en `.205`), esa tabla recibe escritura propia — no uses `.205` como origen
 del backfill para ella, backfillea directo contra `.207` (ver el caso real
 de `ZTRV_Solicitud_Material` en `load_solicitudes.py:main()`, que existe
-justo por esto).
+justo por esto). En ese caso, pasa `refresh="drop_resources"` a
+`pipeline.run(...)` (o al `run_tracked(...)` que lo envuelve) — fuerza a
+dlt a tirar el estado incremental que pudiera haber quedado de una corrida
+anterior y traer el histórico completo desde cero, en vez de asumir que ya
+existe un punto de corte previo.
 
 | Resultado | Estrategia |
 |---|---|
@@ -194,6 +208,15 @@ tocar producción en el paso 4.
 Aquí es donde se cambia de base: de `.205` (exploración) a
 **`.207/TRIVASADB`**, la única fuente de cifras oficiales. Añade la
 función incremental al mismo archivo:
+
+**Por qué esto no deja huecos:** el `pipeline_name` y el `dataset_name` de
+abajo son **los mismos** que usó el backfill del paso 2. dlt persiste el
+`last_value` de `Fecha_Ult_Modif` alcanzado por esa corrida (estado local
+en `.dlt/pipelines/<pipeline_name>/`), y esta función lo retoma solo — el
+`WHERE Fecha_Ult_Modif > <cursor>` que arma `sql_table()` usa ese valor
+guardado, no `1900-01-01` otra vez. Si cambias el `pipeline_name` entre el
+backfill y el incremental, pierdes esa continuidad y vuelves a traer todo
+el histórico contra producción por accidente.
 
 ```python
 CREDENTIALS_207 = URL.create(
