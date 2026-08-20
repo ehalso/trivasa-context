@@ -8,6 +8,7 @@ El entorno completo: de dónde sale la data, por dónde pasa y dónde termina.
 - **[El ERP: Management Pro](erp-management-pro.md)** — qué es el sistema origen, sus tres capas (escritorio VB6, IIS, servicio .NET), cómo se conecta a la base, y la deuda técnica que afecta leer su código.
 - **[Stack de BI en ctunlinux](stack-bi.md)** — servicios, puertos, repos, extracción con dlt, transformación con dbt, orquestación, observabilidad, `torep` (captura de output de scripts/SQL a HTML) y el DuckDB CLI + conector `mssql`.
 - **[Hosting de la wiki](wiki-hosting.md)** — cómo se publica este sitio.
+- **[Runbook: agregar una tabla nueva](runbook-tabla-nueva.md)** — de cero a un tablero en Lightdash: backfill con dlt, incremental contra producción, modelo de dbt y construcción del chart por GUI.
 
 ## El recorrido de un dato
 

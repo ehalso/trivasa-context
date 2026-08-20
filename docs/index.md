@@ -26,6 +26,7 @@ De dónde sale la data, por dónde pasa y dónde termina.
 - [El ERP: Management Pro](arquitectura/erp-management-pro.md) — el sistema origen y sus tres capas
 - [Stack de BI en ctunlinux](arquitectura/stack-bi.md) — servicios, puertos, dlt, dbt, observabilidad
 - [Hosting de la wiki](arquitectura/wiki-hosting.md) — cómo se publica este sitio
+- [Runbook: agregar una tabla nueva](arquitectura/runbook-tabla-nueva.md) — dlt (backfill + incremental) → dbt (staging/marts) → Lightdash (deploy + GUI)
 
 ### [Esquema del ERP](schema/index.md)
 
