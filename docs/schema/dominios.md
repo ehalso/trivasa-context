@@ -121,6 +121,24 @@ Tabla del ERP para traspasos de mercancía entre almacenes/sucursales, origen de
 - **Nombre de operador**: `Oper_Alta` guarda una clave (ej. `LEUAN`, `RVARGUEZ`), no el nombre. Se resuelve vía `EMPRESAS_2.dbo.Operadores` (`Operador`, `Nombre`, `EMail`, …) — join cross-database contra otra base en la misma instancia. **No está en el pipeline de dlt** (`raw.*`); el mart se queda con la clave por ahora, resolución de nombre pendiente.
 - `Sc_Descripcion` (Sucursal) y `Al_Descripcion` (Almacen) sí resuelven a nombre — ambas ya están en `raw.*` vía dlt.
 
+### Columnas conocidas (parcial — ⚠️ no es el esquema completo)
+
+Solo las columnas que se mencionaron en la sesión de exploración. **Falta el `information_schema`/`sys.columns` completo** — no verificado, requiere acceso a `.205`/`.207` o a `postgres-dw` que esta máquina no tiene. No añadido a [Modelos de datos de `raw`](modelos-raw.md) por eso (ese archivo solo documenta esquema verificado contra el motor).
+
+| Columna | Tipo (no confirmado) | Nota |
+|---|---|---|
+| `Tr_Folio` | — | PK compuesta junto con `Tr_ID` |
+| `Tr_ID` | — | PK compuesta junto con `Tr_Folio` |
+| `Tr_Tipo` | — | `EN`/`RC`/`SL` |
+| `Es_Cve_Estado` | — | FK a `Estado`; ver valores reales arriba |
+| `Al_Cve_Almacen_Recibe` | — | NULL mientras `Es_Cve_Estado='AC'` |
+| `Z_Tr_Operador_Recepcion` | — | NULL mientras `Es_Cve_Estado='AC'` |
+| `Oper_Alta` | — | clave de operador, no nombre — resolver vía `EMPRESAS_2.dbo.Operadores` |
+| `Sc_Cve_Sucursal` (origen/destino) | — | joins x2 en `int_transferencia.sql` |
+| `Al_Cve_Almacen` | — | join a `Almacen` |
+
+Pendiente: correr `SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='Transferencia'` contra `.205` y completar esta tabla, o mejor, agregar `Transferencia` al diagrama de [Modelos de datos de `raw`](modelos-raw.md) siguiendo su misma metodología.
+
 ## Personalizaciones `ZTRV_*` más relevantes
 
 Aquí vive la lógica propia de Trivasa:
