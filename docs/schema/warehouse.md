@@ -227,6 +227,37 @@ Agregada al dashboard como tarjeta junto a la intro (chart "Documento ·
 Ficha vertical") — vista rápida de todo el documento antes de bajar a las
 5 tablas de detalle existentes.
 
+**Actualizado el mismo día:** la ficha única mostraba TODOS los campos de
+la cadena (solicitud + requisición + OC + compra) aunque el usuario
+hubiera filtrado por un solo tipo de documento. Se reemplazó por **4
+fichas independientes** ("Documento · Ficha de solicitud/requisición/
+orden-compra/compra"), cada una filtrando `campo` (operador `include`) a
+exactamente el mismo conjunto que ya usa su tabla horizontal —
+"Documento · Ficha vertical" se borró. Como corren sobre `fct_documento_ficha`
+(un explore distinto al que apuntan los 3 filtros del dashboard, que
+targetean `fct_documento_trazabilidad`), hizo falta agregar `tileTargets`
+a los 3 filtros mapeando cada una de las 4 fichas al campo equivalente —
+sin eso el filtro del dashboard simplemente no las tocaba (confirmado con
+la API: el `metricQuery` resultante ni siquiera incluía el filtro cuando
+faltaba el `tileTargets`).
+
+#### `Manifiesto de Compras` (2026-08-21, mismo día): buscador como Claude Artifact
+
+El mismo caso de uso (buscar un documento, ver su cadena, navegar a los
+relacionados) también se construyó como **Claude Artifact** standalone
+(HTML+JS autocontenido, sin backend) con una UX que Lightdash no puede
+dar: ruta visual tipo línea de tiempo/milestones, y clic en un documento
+relacionado para saltar a su ficha. Un Artifact no tiene salida de red
+(sandbox sin acceso a Postgres/Lightdash), así que el dato va **embebido
+como snapshot** al publicar — cubre solo los últimos 6 meses, regenerar a
+mano cuando haga falta refrescar.
+
+Código promovido en `trivasa-bi-core/artifacts/manifiesto-compras/`
+(export + template + instrucciones de regeneración en su `README.md`) —
+el `fct_documento_trazabilidad` de este mart es su única fuente. Publicado
+en https://claude.ai/code/artifact/e5d2f943-bf71-4b6d-8c7a-50d83729d2c7
+(privado).
+
 ### `fct_transferencia` (2026-08-21)
 
 Mart nuevo para Lightdash, origen: reporte nativo "Transferencias por recibir" (`RPTRF01L`). Detalle de la tabla fuente en [Dominios → Transferencia](dominios.md#transferencia). Fila count re-confirmada en `analytics_marts.fct_transferencia`: **143 filas** (2026-08-21, vía `docker exec postgres-dw psql`).
