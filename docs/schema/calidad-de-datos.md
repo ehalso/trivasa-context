@@ -344,3 +344,42 @@ Fácil escribir mal el nombre y obtener 0 filas **sin error**. Validar con `COUN
 - **`opc_*` duplican tablas base** — sumarlas junto a las originales duplica cifras.
 - **`Requisicion_Documento`** (536 filas) es un agregador administrativo para compras recurrentes de volumen (diésel, uniformes), no parte del camino crítico.
 - **Los borrados físicos no dejan rastro**: la auditoría `Audit_Delete_DML` no tiene especificación ligada a `TRIVASADB3`. Las bajas lógicas sí (`Fecha_Baja`, `Es_Cve_Estado`).
+
+---
+
+## No toda Orden_Compra/Requisicion_Compra nace de una solicitud de material
+
+> Confirmado 2026-08-21 con conteos reales sobre `origen_tabla`
+> (`Oc_Tabla`/`Rc_Tabla`) contra `raw.orden_compra`/`raw.requisicion_compra`,
+> construyendo `fct_documento_trazabilidad` ([Warehouse](warehouse.md#fct_documento_trazabilidad-2026-08-21)).
+
+Es fácil asumir que el flujo de compras siempre arranca en una solicitud
+de material (`Solicitud de material → Requisición → Orden de compra`, ver
+[Solicitud de material](solicitud-material.md)) y que basta con seguir el
+patrón polimórfico hacia atrás para siempre llegar a un `Sm_Folio`. **No
+es así**: la mayoría de las órdenes de compra y requisiciones del ERP no
+pasan por ese flujo en absoluto.
+
+Distribución real de `origen_tabla`:
+
+| Tabla | `origen_tabla` | n | Qué es |
+|---|---|---:|---|
+| `Orden_Compra` | `REQUISICION_COMPRA` | 42,271 | viene de una requisición formal |
+| `Orden_Compra` | *(vacío)* | 18,021 | sin origen registrado |
+| `Orden_Compra` | `REQUISICION_DOCUMENTO` | 4,097 | agregador de compras recurrentes de volumen, ver [Otros](#otros) |
+| `Orden_Compra` | `ZTRV_SOLICITUD_MATERIAL` | 861 | ruta directa desde la solicitud |
+| `Requisicion_Compra` | *(vacío)* | 53,224 | sin origen registrado — la mayoría |
+| `Requisicion_Compra` | `ZTRV_Solicitud_Material` | 19,526 | viene de una solicitud de material |
+| `Requisicion_Compra` | `Resurtido` | 7,579 | resurtido automático |
+| `Requisicion_Compra` | `RESURTIDO` | 2,347 | mismo resurtido automático, casing distinto — mismo gotcha de casing duplicado ya documentado para `Pad_Tabla` ([Basura de plantillas](#basura-de-plantillas-capturada-como-dato-real)) |
+| `Requisicion_Compra` | `ORDEN_SERVICIO` | 745 | viene de una orden de servicio, no de compras |
+
+**Implicación práctica:** de las 42,271 líneas de OC que sí vienen de una
+requisición, solo 19,526 de esas requisiciones trazan a su vez a
+`ZTRV_Solicitud_Material` — el resto queda sin solicitud de origen
+resoluble. Un modelo que intente "subir" desde cualquier OC/RC hasta una
+solicitud de material va a dejar `solicitud_folio` en `NULL` para la
+mayoría de las filas (~44% de las líneas de OC, ~86% de las de RC en
+`fct_documento_trazabilidad`) — **es dato real, no un hueco de join**. No
+asumir que un `solicitud_folio` vacío en ese contexto es un error de
+código.

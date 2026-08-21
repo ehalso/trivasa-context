@@ -88,7 +88,52 @@ abril, más vieja que la de `.200`), así que `connection.py` (que apunta a
 
 ## Marts de dbt
 
-`dim_producto` (14,668) · `fct_compras` (62,762) · `fct_existencias` (1,516,397) · `fct_gastos_cfdi` (12,229) · `fct_ordenes_compra` · `fct_solicitud_material_pipeline` (250,992, grano línea) · `fct_solicitud_material_autorizacion` (31,294, grano folio) · `fct_transferencia` (143 filas, grano folio — agregado 2026-08-21)
+`dim_producto` (14,668) · `fct_compras` (62,762) · `fct_existencias` (1,516,397) · `fct_gastos_cfdi` (12,229) · `fct_ordenes_compra` · `fct_solicitud_material_pipeline` (250,992, grano línea) · `fct_solicitud_material_autorizacion` (31,294, grano folio) · `fct_transferencia` (143 filas, grano folio — agregado 2026-08-21) · `fct_documento_trazabilidad` (357,296 filas, grano etapa más avanzada — agregado 2026-08-21)
+
+### `fct_documento_trazabilidad` (2026-08-21)
+
+Mart nuevo, no es de agregados de negocio: es un **buscador de un
+documento a la vez**. Dado cualquiera de los tres folios de entrada al
+proceso de compras (solicitud de material, requisición de compra, u orden
+de compra), la fila trae el resto de la cadena (los otros folios, si
+existen) + la info descriptiva de cada documento (fechas, estado, montos,
+sucursal, proveedor, producto). Grano: la etapa más avanzada alcanzada por
+cada línea — una fila de OC si ya hay OC, si no una de RC si ya hay RC, si
+no una de (`solicitud_folio`, `producto_id`) si la solicitud nunca generó
+ni RC ni OC.
+
+Enlaces siempre por el patrón polimórfico `Xx_Tabla`/`Xx_Documento` (nunca
+folio=folio, ver [Calidad de datos](calidad-de-datos.md#joins-que-parecen-obvios-pero-son-falsos)),
+incluida la dirección hacia `Compra_Encabezado` (`Co_Documento=Oc_Folio`)
+que no estaba expuesta en `stg_compra_encabezado` — se le agregaron esas
+dos columnas (`origen_tabla`/`origen_documento`) para este mart.
+
+**Hallazgo nuevo confirmado con conteos reales** (`origen_tabla` de
+`Orden_Compra`/`Requisicion_Compra`): no toda OC/RC nace de una solicitud
+de material. De 42,271 líneas de OC con `origen_tabla='REQUISICION_COMPRA'`,
+la requisición detrás solo tiene `origen_tabla='ZTRV_Solicitud_Material'`
+en 19,526 de ellas — el resto viene vacío (53,224, la mayoría del total de
+RC), o de `'Resurtido'`/`'RESURTIDO'` (resurtido automático, mismo casing
+duplicado que el gotcha ya documentado de `Pad_Tabla`) u `'ORDEN_SERVICIO'`.
+Por eso `solicitud_folio` sale `NULL` en ~44% de las líneas en etapa OC y
+~86% en etapa RC — es dato real, no un hueco de join: la mayoría de las
+compras del ERP no pasan por el flujo de solicitud de material en
+absoluto. Detalle completo en el modelo dbt.
+
+Validado con `dbt run` + queries reales contra `postgres-dw` y contra la
+API de Lightdash (filtro `equals` con folio real resuelve la cadena
+completa; con `values` vacío no filtra nada — confirma el comportamiento
+esperado del dashboard). No filtra por estado "vigente" como los marts de
+pipeline — es un buscador/auditor, tiene que encontrar un folio sin
+importar si ya quedó cancelado, cerrado, o recibido total.
+
+Dashboard publicado:
+[Documento · Buscador y trazabilidad](https://dash.frento.com.mx/projects/df98464b-9806-49f2-b5cb-2f99d47905ad/dashboards/b38e1413-e67b-4ea6-be5a-e3e7af45d266/view)
+(5 charts + 1 dashboard, contenido-como-código en `lightdash/`). Filtros
+independientes por folio de solicitud/requisición/orden de compra, sin
+valor por defecto — se llena solo el que se tenga a la mano. Cada tabla de
+detalle trae su propio filtro base "folio no nulo" para no mostrar filas
+en blanco cuando esa etapa de la cadena no aplica.
 
 ### `fct_transferencia` (2026-08-21)
 
