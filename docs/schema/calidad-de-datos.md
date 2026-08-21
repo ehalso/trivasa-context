@@ -340,6 +340,23 @@ Fácil escribir mal el nombre y obtener 0 filas **sin error**. Validar con `COUN
 
 ---
 
+## "NUMERO PARTE" en la pantalla de Solicitud de material NO es `Pr_Numero_Parte`
+
+Confirmado 2026-08-21, construyendo la tabla de detalle de Solicitud de
+material para `fct_documento_trazabilidad`. Hay **tres** campos candidatos
+con nombre parecido, y solo uno es el que la pantalla nativa (`ZTRV098`)
+realmente muestra bajo la columna `NUMERO PARTE`:
+
+| Campo | Qué es en realidad |
+|---|---|
+| `Producto.Pr_Cve_Producto` (`producto_id`) | **Es el correcto.** Confirmado contra un folio real de pantalla: `producto_id='0000037010'` = "CINTA 20 MTS FIBRA DE VIDRIO", coincide exacto con el resto de la fila. |
+| `Producto.Pr_Clave_Corta` (`producto_clave_corta` en `dim_producto`) | Otro campo real de `Producto`, pero **no** es lo que la pantalla muestra — se asumió que sí en una sesión anterior, quedó mal etiquetado en `_marts.yml` hasta que se corrigió. |
+| `ZTRV_Solicitud_Material_Detalle.Pr_Numero_Parte` | Existe en la tabla de detalle (nombre más parecido al de la columna en pantalla), pero casi siempre viene vacío y **tampoco** es lo que se muestra. |
+
+**Lección:** un nombre de columna parecido al de la pantalla no garantiza que sea el campo correcto — verificar siempre contra un folio real exportado de pantalla, no solo por coincidencia de nombre.
+
+---
+
 ## Otros
 
 - **`raw.sucursal` (41) y `raw.almacen` (465) SÍ están completos** — verificado 2026-08-21 con query directa contra `.205/TRIVASADB3` (vía SSH a `ctunlinux`): `SELECT COUNT(*) FROM Sucursal` → 41 (exacto) y `SELECT COUNT(*) FROM Almacen` → 464 (vs 465 en `raw`, diferencia de 1 por timing). La nota anterior en [Warehouse](warehouse.md#nota-de-reconciliación) afirmaba un gap de `raw.almacen` contra 928 filas en origen — **ese 928 era un dato incorrecto**, corregido.

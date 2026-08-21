@@ -258,6 +258,34 @@ el `fct_documento_trazabilidad` de este mart es su única fuente. Publicado
 en https://claude.ai/code/artifact/e5d2f943-bf71-4b6d-8c7a-50d83729d2c7
 (privado).
 
+**Actualizado el mismo día — campos reales del detalle de Solicitud de
+material** (`solicitud_linea_id`/`Sm_ID`, `solicitud_concepto`/Descripción,
+`solicitud_tipo_gasto_id`/Clave, `solicitud_cantidad_control_1`,
+`solicitud_apartado`, `solicitud_existencia_disponible`,
+`solicitud_reorden_minimo`/`_maximo`), agregados a `fct_documento_trazabilidad`
+vía joins nuevos a `stg_ztrv_apartado`, `stg_existencia` (ya existían) y
+`stg_reorden` (nuevo, `Re_Tipo='PR'` es el 100% de las filas). Existencia
+y Reorden se resuelven por el **almacén de la solicitud**
+(`Sm_Al_Cve_Almacen`), no un almacén genérico.
+
+**Hallazgo/corrección importante:** el "NUMERO PARTE" que muestra la
+pantalla nativa de Solicitud de material (`ZTRV098`) **no** es
+`Producto.Pr_Clave_Corta` (`producto_clave_corta` en `dim_producto` —
+así se había etiquetado por error en la sesión anterior) — es
+`Pr_Cve_Producto` (`producto_id`), ya presente en el mart. Confirmado
+contra un folio real de pantalla del usuario: `producto_id='0000037010'`
+= "CINTA 20 MTS FIBRA DE VIDRIO", coincidencia exacta, junto con el resto
+de la fila (`Clave`=0036, `Control-1`=1 PZ, `Apartado`=0, `Existencia`=0,
+`Max`=0, `Min`=0, `Sm_ID`=0002, `Estado`=CE).
+
+**No se agregó** Pedido/Comprado/Surtido/Saldo a surtir (esa pantalla los
+calcula en vivo, no son columnas almacenadas en ninguna tabla — replicarlos
+exigiría reconstruir esa lógica y validarla contra un baseline real de
+pantalla, mismo patrón ya documentado como "sin converger" en
+[Solicitud de material](solicitud-material.md#pestana-au-parcialmente-explorada-sin-converger)
+para casos similares) ni el nombre del tipo de gasto (el catálogo
+`Tipo_Gasto` no está replicado en el warehouse todavía).
+
 ### `fct_transferencia` (2026-08-21)
 
 Mart nuevo para Lightdash, origen: reporte nativo "Transferencias por recibir" (`RPTRF01L`). Detalle de la tabla fuente en [Dominios → Transferencia](dominios.md#transferencia). Fila count re-confirmada en `analytics_marts.fct_transferencia`: **143 filas** (2026-08-21, vía `docker exec postgres-dw psql`).
