@@ -62,6 +62,10 @@ SELECT Es_Cve_Estado, COUNT(*) FROM <tabla> GROUP BY Es_Cve_Estado ORDER BY 2 DE
 
 Cualquier pantalla o reporte que muestre "solicitudes en estado X" por pestaña (p. ej. las pestañas AC/AU/AB/PR de `ZTRV098` "Control de Solicitudes de material v3") probablemente filtra por el estado de la **línea**, no solo por el de la cabecera. No asumir que basta con filtrar la cabecera. Ver [Solicitud de material](solicitud-material.md).
 
+**Cuantificado 2026-08-21** con un join real cabecera↔detalle sobre todo el histórico: la divergencia **no es un caso raro, es el patrón dominante**. La combinación más frecuente de todas (129,055 líneas / 69,593 folios) es cabecera `CE` (cerrada) con detalle `AC` (activa) — más frecuente que cabecera=detalle=`CE` (66,370 líneas, la combinación que "coincide"). Por eso `fct_documento_trazabilidad` expone `solicitud_estado_encabezado` y `solicitud_estado_detalle` como dos columnas separadas en vez de una sola — ver [Warehouse](warehouse.md#rediseño-2026-08-21-mismo-día-doble-estado--autorización-por-documento--oc-canceladas).
+
+Para contraste, el mismo tipo de divergencia **no** aplica a `Compra_Encabezado`↔`Compra`: de 150,727 líneas, 150,726 coinciden exactamente con su cabecera — ahí sí es seguro usar solo el estado de cabecera.
+
 ---
 
 ## Joins que parecen obvios pero son falsos

@@ -88,7 +88,7 @@ abril, más vieja que la de `.200`), así que `connection.py` (que apunta a
 
 ## Marts de dbt
 
-`dim_producto` (14,668) · `fct_compras` (62,762) · `fct_existencias` (1,516,397) · `fct_gastos_cfdi` (12,229) · `fct_ordenes_compra` · `fct_solicitud_material_pipeline` (250,992, grano línea) · `fct_solicitud_material_autorizacion` (31,294, grano folio) · `fct_transferencia` (143 filas, grano folio — agregado 2026-08-21) · `fct_documento_trazabilidad` (357,296 filas, grano etapa más avanzada — agregado 2026-08-21)
+`dim_producto` (14,668) · `fct_compras` (62,762) · `fct_existencias` (1,516,397) · `fct_gastos_cfdi` (12,229) · `fct_ordenes_compra` · `fct_solicitud_material_pipeline` (250,992, grano línea) · `fct_solicitud_material_autorizacion` (31,294, grano folio) · `fct_transferencia` (143 filas, grano folio — agregado 2026-08-21) · `fct_documento_trazabilidad` (388,908 filas, grano etapa más avanzada — agregado 2026-08-21, ampliado el mismo día)
 
 ### `fct_documento_trazabilidad` (2026-08-21)
 
@@ -134,6 +134,62 @@ independientes por folio de solicitud/requisición/orden de compra, sin
 valor por defecto — se llena solo el que se tenga a la mano. Cada tabla de
 detalle trae su propio filtro base "folio no nulo" para no mostrar filas
 en blanco cuando esa etapa de la cadena no aplica.
+
+#### Rediseño 2026-08-21 (mismo día): doble estado + autorización por documento + OC canceladas
+
+Tres cambios acordados tras analizar los catálogos de estado reales de los
+4 documentos de la cadena (ver también
+[Calidad de datos](calidad-de-datos.md#no-toda-orden_comprarequisicion_compra-nace-de-una-solicitud-de-material)
+para el hallazgo de origen):
+
+1. **`int_documento_autorizacion.sql`** (intermediate, nuevo): generaliza
+   `int_orden_compra_autorizacion.sql` (que se deja intacto, solo cubre OC
+   y lo usa `fct_requisiciones_compra`) a los 3 documentos que pueden
+   llevar autorización presupuestal. **Cobertura real confirmada**,
+   aislando el período con el proceso ya vigente (desde 2024-03-31 —
+   antes de esa fecha no hay ninguna fila, es corte temporal, no
+   estructural):
+
+   | Documento | % con autorización de documento (`Pad`) | % con cambio de presupuesto (`Psc`) |
+   |---|---:|---:|
+   | Solicitud de material | 98.3% | 68.2% |
+   | Requisición de compra | 37.8% | 0.4% |
+   | Orden de compra | 42.6% | 38.4% |
+
+   Solo Solicitud pasa casi siempre por autorización de documento — en
+   Requisición y Orden de compra la **mayoría** de los folios nunca tocan
+   esa bitácora. `sin_registro`/`sin_solicitud` es por eso un estado de
+   negocio real para esos dos, no un hueco de dato. `fct_documento_trazabilidad`
+   trae `categoria_documento`/`categoria_presupuesto` para los 3
+   documentos, con `coalesce` a esos valores solo cuando el folio SÍ
+   existe en esa fila (`NULL` real sigue significando "esta fila no tiene
+   ese documento" — ej. una fila en etapa `REQUISICION_COMPRA` sin OC no
+   debe mostrar categoría de OC).
+
+2. **Doble estado de Solicitud**: `solicitud_estado_encabezado` y
+   `solicitud_estado_detalle` (antes solo se exponía cabecera, columna
+   renombrada de `solicitud_estado`). Verificado con un join real
+   cabecera↔detalle: **divergen la mayoría de las veces** — el patrón más
+   común de todos (129,055 líneas / 69,593 folios) es cabecera `CE`
+   (cerrada) con detalle `AC` (activa), más frecuente que
+   cabecera=detalle=`CE` (66,370 líneas). Mostrar solo cabecera escondía
+   que el folio puede decir "cerrado" con líneas todavía activas. Para
+   contraste, el mismo join en `Compra_Encabezado`↔`Compra` **no** tiene
+   este problema: de 150,727 líneas, 150,726 coinciden exactamente con su
+   cabecera.
+
+3. **`stg_orden_compra_todas.sql`** (staging, nuevo): igual a
+   `stg_orden_compra.sql` pero sin el filtro `Es_Cve_Estado<>'CA'`. El
+   buscador ahora sí encuentra órdenes de compra canceladas — **47% del
+   histórico de `Orden_Compra` está cancelado** (verificado en vivo
+   2026-08-21), y antes de este cambio esas quedaban invisibles para el
+   buscador. `stg_orden_compra` se deja intacto para los marts de
+   pipeline, donde filtrar `CA` sí es correcto.
+
+Filas: 357,296 → 388,908 (creció por incluir las OC canceladas). Validado
+con `dbt run` + queries reales + la API de Lightdash (folio `05-0052765`:
+cabecera=`FN` vs detalle=`AC`, `categoria_documento='sin_registro'` cuando
+corresponde).
 
 ### `fct_transferencia` (2026-08-21)
 
