@@ -36,7 +36,7 @@ Ordenados por cuántas FKs los apuntan — la mejor medida de su centralidad:
 | `Estado` | 66 | 660 | Estado de cada registro — el más referenciado de la base |
 | `Producto` | 27,359 | 137 | Catálogo de productos |
 | `Sucursal` | 41 | 128 | Sucursales, ligadas a `Empresa` |
-| `Almacen` | 464 | 124 | Almacenes por sucursal |
+| `Almacen` | 464 | 124 | Almacenes por sucursal — re-verificado 2026-08-21, coincide con `raw.almacen` |
 | `Moneda` | 184 | 79 | Monedas |
 | `Color` | 5 | 75 | Dimensión de producto |
 | `Talla` | 9 | 75 | Dimensión de producto |
@@ -108,36 +108,27 @@ Ignorarlas en el catálogo de BI. No tiene sentido borrarlas: son parte del prod
 
 ## `Transferencia`
 
-> ⚠️ Reportado en sesión de trabajo 2026-08-21, **no re-verificado por Claude Code** (esta máquina no tiene acceso a `.205`/`.207`/`postgres-dw`). Confirmar con query real antes de confiar en cifras exactas.
+> Verificado por Claude Code vía SSH a `ctunlinux` + `docker exec postgres-dw` + query directa a `.205`. 2026-08-21.
 
 Tabla del ERP para traspasos de mercancía entre almacenes/sucursales, origen del mart `fct_transferencia` (ver [Warehouse](warehouse.md)). Explorada a partir del reporte nativo "Transferencias por recibir" (`RPTRF01L`).
 
-- **PK real:** `(Tr_Folio, Tr_ID)` — compuesta, confirmada por query contra los datos, no por constraint declarado en el esquema.
+- **PK real:** `(Tr_Folio, Tr_ID)` — compuesta, usada como tal en `dlt/load_transferencia.py` (`primary_key=["Tr_Folio", "Tr_ID"]`), no por constraint declarado en el esquema origen.
 - **`Tr_Tipo`**: `EN`=envío, `RC`=recepción, `SL`=solicitud (no afecta inventario).
-- **Estados reales para `Tr_Tipo='EN'`** (conteos reportados en sesión, no re-verificados aquí): `AC` 207 · `CA` 14,282 · `CE` 5,784 · `RCT` 192,120.
-  - El reporte nativo `RPTRF01L` filtra `IN('AC','RCP')`, pero `'RCP'` **no existe** en los datos reales — filtro muerto, posiblemente un state code viejo reemplazado por `RCT`. En la práctica el filtro nativo equivale a filtrar solo `AC`.
+- **Estados reales para `Tr_Tipo='EN'`** (`raw.transferencia`, conteo en vivo 2026-08-21 — sigue creciendo por el incremental diario, las cifras de la sesión original ya quedaron atrás): `RCT` 192,767 · `CA` 14,326 · `CE` 6,063 · `AC` 346.
+  - El reporte nativo `RPTRF01L` filtra `IN('AC','RCP')`; `'RCP'` no aparece en esta distribución — consistente con ser un filtro muerto/state code viejo. En la práctica equivale a filtrar solo `AC`.
   - Significado del estado `CE` sin resolver.
-- `al_cve_almacen_recibe` y `z_tr_operador_recepcion` existen pero quedan `NULL` mientras el estado es `AC` (aún no hay recepción) — no se usaron en el mart.
-- **Nombre de operador**: `Oper_Alta` guarda una clave (ej. `LEUAN`, `RVARGUEZ`), no el nombre. Se resuelve vía `EMPRESAS_2.dbo.Operadores` (`Operador`, `Nombre`, `EMail`, …) — join cross-database contra otra base en la misma instancia. **No está en el pipeline de dlt** (`raw.*`); el mart se queda con la clave por ahora, resolución de nombre pendiente.
-- `Sc_Descripcion` (Sucursal) y `Al_Descripcion` (Almacen) sí resuelven a nombre — ambas ya están en `raw.*` vía dlt.
+  - `stg_transferencia.sql` filtra `tr_tipo='EN' AND es_cve_estado='AC'`, igual que el reporte nativo.
+- `al_cve_almacen_recibe` y `z_tr_operador_recepcion` existen en el esquema pero quedan `NULL` mientras el estado es `AC` (aún no hay recepción) — no se usaron en el mart.
+- **Nombre de operador**: `Oper_Alta` guarda una clave (ej. `AACHAN`, `AAGUILAR`), no el nombre. Se resuelve vía `EMPRESAS_2.dbo.Operadores` (734 filas, columnas `Operador`/`Nombre`/...) — confirmado con query real, cross-database join contra otra base en la misma instancia `.205`. **No está en el pipeline de dlt** (`raw.*`); el mart se queda con la clave por ahora (`operador_clave` en `int_transferencia.sql`/`fct_transferencia.sql`), resolución de nombre pendiente.
+- `Sc_Descripcion` (Sucursal) y `Al_Descripcion` (Almacen) sí resuelven a nombre — ambas ya están en `raw.*` vía dlt, joineadas en `int_transferencia.sql`.
 
-### Columnas conocidas (parcial — ⚠️ no es el esquema completo)
+### Esquema completo de `raw.transferencia` (Postgres, `information_schema`, verificado 2026-08-21)
 
-Solo las columnas que se mencionaron en la sesión de exploración. **Falta el `information_schema`/`sys.columns` completo** — no verificado, requiere acceso a `.205`/`.207` o a `postgres-dw` que esta máquina no tiene. No añadido a [Modelos de datos de `raw`](modelos-raw.md) por eso (ese archivo solo documenta esquema verificado contra el motor).
+44 columnas, igual a como dlt normaliza `Transferencia` de `.205`/`.207`:
 
-| Columna | Tipo (no confirmado) | Nota |
-|---|---|---|
-| `Tr_Folio` | — | PK compuesta junto con `Tr_ID` |
-| `Tr_ID` | — | PK compuesta junto con `Tr_Folio` |
-| `Tr_Tipo` | — | `EN`/`RC`/`SL` |
-| `Es_Cve_Estado` | — | FK a `Estado`; ver valores reales arriba |
-| `Al_Cve_Almacen_Recibe` | — | NULL mientras `Es_Cve_Estado='AC'` |
-| `Z_Tr_Operador_Recepcion` | — | NULL mientras `Es_Cve_Estado='AC'` |
-| `Oper_Alta` | — | clave de operador, no nombre — resolver vía `EMPRESAS_2.dbo.Operadores` |
-| `Sc_Cve_Sucursal` (origen/destino) | — | joins x2 en `int_transferencia.sql` |
-| `Al_Cve_Almacen` | — | join a `Almacen` |
+`tr_folio` · `tr_id` · `tr_fecha` (timestamptz) · `tr_tipo` · `tr_referencia` · `tr_comentario` · `tr_tabla` · `tr_documento` · `sc_cve_sucursal` · `sc_cve_sucursal_recibe` · `pr_cve_producto` · `tl_cve_talla` · `cl_cve_color` · `al_cve_almacen` · `tr_cantidad_1`/`tr_unidad_1` · `tr_cantidad_control_1`/`tr_unidad_control_1` · `tr_cantidad_control_2`/`tr_unidad_control_2` · `tr_cantidad_costo`/`tr_unidad_costo` · `tr_costo` · `tr_importe_costo` · `tr_indirecto_factor` · `tr_indirecto_importe` · `lt_cve_lote` · `lt_fecha_caducidad` · `lt_pedimento` · `lt_fecha_pedimento` · `oper_alta`/`fecha_alta` · `oper_ult_modif`/`fecha_ult_modif` · `oper_baja`/`fecha_baja` · `es_cve_estado` · `tr_fecha_entrega` · `al_cve_almacen_recibe` · `z_tr_comentario_recepcion` · `z_tr_operador_recepcion` · `z_tr_recepcion_automatica` (boolean) · `_dlt_load_id`/`_dlt_id`.
 
-Pendiente: correr `SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='Transferencia'` contra `.205` y completar esta tabla, o mejor, agregar `Transferencia` al diagrama de [Modelos de datos de `raw`](modelos-raw.md) siguiendo su misma metodología.
+`stg_transferencia.sql` solo expone un subconjunto (12 columnas + `tr_tipo` para el filtro) — no hay pérdida real de dato, solo reducción intencional a lo que usa el mart. Sobran en el mart columnas del esquema completo como `pr_cve_producto`, `tl_cve_talla`/`cl_cve_color`, `tr_costo`, `lt_*` (lote/caducidad/pedimento) — disponibles en `raw.transferencia` si algún caso de uso futuro las necesita.
 
 ## Personalizaciones `ZTRV_*` más relevantes
 

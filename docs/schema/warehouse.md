@@ -92,7 +92,7 @@ abril, más vieja que la de `.200`), así que `connection.py` (que apunta a
 
 ### `fct_transferencia` (2026-08-21)
 
-Mart nuevo para Lightdash, origen: reporte nativo "Transferencias por recibir" (`RPTRF01L`). Detalle de la tabla fuente en [Dominios → Transferencia](dominios.md#transferencia).
+Mart nuevo para Lightdash, origen: reporte nativo "Transferencias por recibir" (`RPTRF01L`). Detalle de la tabla fuente en [Dominios → Transferencia](dominios.md#transferencia). Fila count re-confirmada en `analytics_marts.fct_transferencia`: **143 filas** (2026-08-21, vía `docker exec postgres-dw psql`).
 
 Pipeline completo:
 
@@ -108,7 +108,9 @@ Pipeline completo:
 - Resolución de nombre de operador (`EMPRESAS_2.Operadores`) — el mart se queda con la clave `Oper_Alta` por ahora.
 - Significado del estado `CE` en `Transferencia`.
 
-> Hay un modelo `fct_movimientos.sql` en el repo **sin tabla materializada** en `analytics_marts` — revisar si falla o si nunca se corrió.
+> `fct_movimientos` ya está materializado en `analytics_marts` (re-verificado 2026-08-21) — la advertencia anterior sobre que le faltaba tabla ya no aplica.
+
+12 marts materializados en `analytics_marts` a 2026-08-21 (verificado por `information_schema`): `dim_producto`, `fct_compras`, `fct_existencias`, `fct_gastos_cfdi`, `fct_movimientos`, `fct_ordenes_compra`, `fct_requisiciones_compra`, `fct_requisiciones_compra_flujo`, `fct_requisiciones_compra_worklist`, `fct_solicitud_material_autorizacion`, `fct_solicitud_material_pipeline`, `fct_transferencia` — coincide con el "12/12 explores" del deploy de Lightdash de la sesión 2026-08-21.
 
 Los dos marts de solicitudes tienen un dashboard de Lightdash publicado como código en `lightdash/dashboards/solicitudes-de-material-backlog-vivo.yml`:
 [Solicitudes de material · Backlog vivo](https://dash.frento.com.mx/projects/df98464b-9806-49f2-b5cb-2f99d47905ad/dashboards/6655b5bf-cfce-46de-97b1-07e87eeb4e48/view).
@@ -165,8 +167,10 @@ La cobertura está sesgada a **compras e inventario**. Prioridades:
 | **Excluir** | `Imagen_Objeto`, `Adjunto`, `ZTRV_Almacen_Digital`, `Comentario` | Binarios: 62 GB sin valor analítico |
 | **Excluir** | `opc_*` (25 tablas) | Duplican tablas base |
 
-### Nota de reconciliación
+### Nota de reconciliación — corregida 2026-08-21
 
-`raw.almacen` (465) sigue sin reconciliar contra `TRIVASADB3` (.205, 928 filas) — gap abierto. En el caso concreto de `fct_transferencia` (sesión 2026-08-21) el `LEFT JOIN` contra `raw.almacen` no generó `NULL`s, pero el gap en sí no está resuelto y puede afectar otros usos.
+La entrada original de esta nota afirmaba `raw.almacen` (465) vs `TRIVASADB3` con 928 filas. **Ese 928 era incorrecto** — verificado por Claude Code vía SSH a `ctunlinux` con `SELECT COUNT(*) FROM Almacen` directo contra `.205/TRIVASADB3`: el conteo real es **464**, prácticamente idéntico a `raw.almacen` (465, diferencia de 1 explicable por timing entre la query y el último incremental). `raw.almacen` **no tiene gap** — ya está reconciliado.
 
-`raw.sucursal` (41) **ya no es gap** — reportado y aceptado en sesión 2026-08-21 como completo (ver [Calidad de datos](calidad-de-datos.md)); la fila de arriba que lo agrupaba con `almacen` quedó obsoleta para `sucursal`.
+`raw.sucursal` (41) tampoco tiene gap: coincide exacto contra `.205` (`SELECT COUNT(*) FROM Sucursal` → 41).
+
+Ambas cifras confirmadas en la misma sesión de verificación 2026-08-21; no queda gap abierto de este tipo entre `raw.*` y `TRIVASADB3` para estas dos tablas.

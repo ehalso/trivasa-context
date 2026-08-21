@@ -338,7 +338,7 @@ Fácil escribir mal el nombre y obtener 0 filas **sin error**. Validar con `COUN
 
 ## Otros
 
-- **`raw.sucursal` (41 filas) SÍ está completo** — reportado en sesión 2026-08-21: coincide exacto con el total real de sucursales activas por empresa (23 TRIVASA + 11 + 1 + 1 + 5 backup). Corrige la nota anterior en [Warehouse](warehouse.md#nota-de-reconciliación) que lo marcaba junto a `raw.almacen` como gap sin reconciliar — ya no aplica a `sucursal`, solo a `almacen`.
+- **`raw.sucursal` (41) y `raw.almacen` (465) SÍ están completos** — verificado 2026-08-21 con query directa contra `.205/TRIVASADB3` (vía SSH a `ctunlinux`): `SELECT COUNT(*) FROM Sucursal` → 41 (exacto) y `SELECT COUNT(*) FROM Almacen` → 464 (vs 465 en `raw`, diferencia de 1 por timing). La nota anterior en [Warehouse](warehouse.md#nota-de-reconciliación) afirmaba un gap de `raw.almacen` contra 928 filas en origen — **ese 928 era un dato incorrecto**, corregido.
 - **Empresas fantasma**: `0097`, `0098`, `0099` (`BACKUP *`) tienen 5 sucursales entre las tres y **0 ventas**. Excluirlas.
 - **Sucursales marcadas en el nombre**: hay descripciones como `KANTUNILKIN (NO UTILIZAR)` y duplicadas (`0005 FABRICA` en `AC`, `0006 FABRICA` en `BA`). Agrupar por `Sc_Cve_Sucursal`, no por `Sc_Descripcion`.
 - **`opc_*` duplican tablas base** — sumarlas junto a las originales duplica cifras.
