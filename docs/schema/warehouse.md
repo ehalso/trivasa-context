@@ -133,7 +133,7 @@ en su lugar.
 
 ## Cron actual
 
-> La convención de `trivasa-bi-core` es systemd timers, pero **la migración no está hecha** — esto sigue en el `crontab` de `ealcocer`.
+> La convención de `trivasa-bi-core` es systemd timers, pero **la migración no está hecha** — esto sigue en el `crontab` de `ealcocer`. Decisión explícita (2026-08-21): por ahora se sigue agregando a este mismo `crontab`, incluido el job de `dbt build` de abajo — la migración a systemd timer queda pendiente para el futuro, no bloquea agendar cosas nuevas mientras tanto.
 
 | Hora | Proceso |
 |---|---|
@@ -144,7 +144,22 @@ en su lugar.
 | 06:45 | `load_movimiento.run_incremental_207()` |
 | 06:50 | `load_solicitudes.run_incremental_207_all()` (incluye `ztrv_apartado`/`ztrv_presupuesto_autorizacion_documento` desde 2026-08-13) |
 | 06:55 | `load_transferencia.run_incremental_207_transferencia()` (agregado 2026-08-21) |
+| 06:58 | `dbt build` (`trivasa-bi-core/dbt`, target `prod`) — reconstruye `analytics_staging`/`analytics_marts` a partir del `raw` recién cargado (agregado 2026-08-21) |
 | 07:00 | `check_raw_freshness.py` |
+
+### 2026-08-21 — se agregó el job de `dbt build`, no existía ninguno
+
+Hallazgo: `analytics_marts.fct_requisiciones_compra` (mart detrás del dashboard
+[Requisiciones de compra · Pipeline](https://dash.frento.com.mx/projects/df98464b-9806-49f2-b5cb-2f99d47905ad))
+llevaba desde el **2026-08-18** sin reconstruirse (`MAX(fecha)` de la tabla
+tope en 2026-08-13) mientras que `raw.orden_compra`/`raw.requisicion_compra`
+sí estaban al día vía dlt. Causa raíz: el `crontab` solo tenía los jobs de
+`dlt` (arriba) y `check_raw_freshness.py` (que valida `raw`, no los marts) —
+ningún proceso corría `dbt build` después de la carga. Se agregó a las 06:58
+(después del último load de dlt a las 06:55, antes del check de las 07:00) y
+se corrió una vez manualmente para poner los marts al día
+(`fct_requisiciones_compra`: 45,040 → 45,272 filas, `MAX(fecha)` 2026-08-13 →
+2026-08-20). Log en `trivasa-bi-core/logs/dbt_build.log`.
 
 > Los diagramas ER de estas tablas y sus relaciones verificadas están en [Modelos de datos de `raw`](modelos-raw.md).
 
