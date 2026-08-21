@@ -191,6 +191,42 @@ con `dbt run` + queries reales + la API de Lightdash (folio `05-0052765`:
 cabecera=`FN` vs detalle=`AC`, `categoria_documento='sin_registro'` cuando
 corresponde).
 
+#### Bug corregido el mismo día: `int_documento_autorizacion` duplicaba filas
+
+Al construir la ficha vertical (ver abajo) se encontró que `solicitud_categoria_documento`
+variaba dentro del mismo `solicitud_folio` (un folio real, `05-0053650`,
+salía con `'reenviado'` y `'autorizado'` a la vez). Causa: el `row_number()`
+de "estado más reciente" particionaba por `origen_tabla` **crudo**, sin
+normalizar el casing duplicado (`ZTRV_Solicitud_Material` vs
+`ZTRV_SOLICITUD_MATERIAL`, el mismo gotcha ya documentado en
+[Calidad de datos](calidad-de-datos.md#pad_tabla-tiene-dos-variantes-de-casing-para-la-misma-tabla)
+para `Pad_Tabla`) — un folio con filas bajo ambas variantes sacaba un "más
+reciente" **por variante**, dejando 2 filas para el mismo
+`(documento_tabla, documento_folio)` normalizado. No era solo cosmético:
+el `LEFT JOIN` en `fct_documento_trazabilidad` fanaba-out esas filas,
+inflando el conteo total del mart (388,908 filas antes del fix). Corregido
+normalizando `documento_tabla` **antes** del `row_number()` — filas bajaron
+a 388,798 (las ~110 de más eran duplicados reales).
+
+#### `fct_documento_ficha` (2026-08-21, mismo día): ficha vertical campo/valor
+
+Mart adicional que despivota `fct_documento_trazabilidad` (33 campos) a
+formato campo/valor **en SQL** (una fila del mart por cada campo), para
+mostrarlo como una ficha vertical con un chart de tabla normal de
+Lightdash en vez de un chart tipo Vega/Custom — se decidió así porque los
+charts Vega en Lightdash pierden "view underlying data" y el
+cross-filtering con el resto del dashboard (limitaciones documentadas del
+tipo de chart, no específicas de este caso), mientras que despivotar en
+SQL conserva todo eso sin trucos. Mantiene `solicitud_folio`/
+`requisicion_folio`/`orden_compra_folio` como columnas propias para que
+los mismos 3 filtros del dashboard sigan aplicando. 12,830,334 filas
+(388,798 × 33 campos) — grande, pero cualquier consulta real siempre va
+filtrada por folio.
+
+Agregada al dashboard como tarjeta junto a la intro (chart "Documento ·
+Ficha vertical") — vista rápida de todo el documento antes de bajar a las
+5 tablas de detalle existentes.
+
 ### `fct_transferencia` (2026-08-21)
 
 Mart nuevo para Lightdash, origen: reporte nativo "Transferencias por recibir" (`RPTRF01L`). Detalle de la tabla fuente en [Dominios → Transferencia](dominios.md#transferencia). Fila count re-confirmada en `analytics_marts.fct_transferencia`: **143 filas** (2026-08-21, vía `docker exec postgres-dw psql`).
