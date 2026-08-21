@@ -116,13 +116,17 @@ lightdash config set-project --uuid <project-uuid>   # fija el proyecto default
 
 **Antes de desplegar, los modelos deben estar materializados de verdad** (`dbt run --profiles-dir ~/.dbt`) — Lightdash lee el catálogo físico del warehouse (columnas reales vía `information_schema`), no solo el `.yml`. Un modelo nunca corrido no tiene columnas que ofrecer como dimensiones.
 
-> ⚠️ **Nota de decisión / gotcha (2026-08-12):** `+meta: hidden: true` puesto a nivel `dbt_project.yml` (usado hoy para todo `models/staging/`, ver tabla de abajo) **no oculta el explore completo** — oculta las dimensiones individuales. Con 0 dimensiones visibles, Lightdash rechaza el modelo como explore inválido (`No dimensions available`) y el deploy falla para los 14 modelos de staging. Mientras no se investigue la forma correcta de ocultar el explore completo (posiblemente `meta.spotlight.visibility` en vez de `meta.hidden`, sin confirmar), el deploy real es:
+> ⚠️ **Nota de decisión / gotcha (2026-08-12, corregida 2026-08-21):** `+meta: hidden: true` puesto a nivel `dbt_project.yml` (usado hoy para todo `models/staging/`) **no oculta el explore completo** — oculta las dimensiones individuales. Con 0 dimensiones visibles, Lightdash rechaza el modelo como explore inválido (`No dimensions available`).
+>
+> **`--exclude staging` YA NO BASTA.** Confirmado 2026-08-21: modelos de `intermediate` que no tienen su propio `meta.dimension` fallan con el mismo error `No dimensions available` — mismo mecanismo que staging, aunque no tengan `hidden: true` explícito. El comando real de deploy es:
 >
 > ```
-> lightdash deploy --exclude staging --profiles-dir ~/.dbt -y
+> lightdash deploy --exclude staging,intermediate --profiles-dir ~/.dbt -y
 > ```
 >
-> Solo se despliegan los 6 explores de `marts` (`fct_compras`, `fct_movimientos`, `fct_existencias`, `dim_producto`, `fct_ordenes_compra`, `fct_gastos_cfdi`), que es lo que se consume en Lightdash de todas formas.
+> **Corrección sobre una creencia equivocada de esta misma nota:** `meta.dimension` en `_marts.yml` **no es lo que habilita** una columna como dimensión — dbt/Lightdash expone toda columna no oculta como dimensión por default; `meta.dimension` solo personaliza `label`/`type` de una dimensión que ya existiría de todas formas. No hacía falta agregarlo a una columna (ej. `folio`) solo para poder usarla en una tabla/explore.
+>
+> Con esto se despliegan los explores de `marts` (incluido `fct_transferencia`, agregado 2026-08-21 — deploy exitoso, 12/12 explores), que es lo que se consume en Lightdash de todas formas.
 
 Proyecto activo en Lightdash: `trivasa_dw` (uuid `df98464b-9806-49f2-b5cb-2f99d47905ad`).
 

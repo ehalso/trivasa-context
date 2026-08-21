@@ -10,7 +10,7 @@
 
 | Dominio | Tablas | Filas | GB | Núcleo |
 |---|---:|---:|---:|---|
-| **CONTABILIDAD** | 25 | 25.2 M | 4.9 | `Poliza_Detalle`, `Poliza_Control`, `Banco_Movimiento`, `Transferencia` |
+| **CONTABILIDAD** | 25 | 25.2 M | 4.9 | `Poliza_Detalle`, `Poliza_Control`, `Banco_Movimiento`, `Transferencia` (ver [Transferencia](#transferencia) abajo) |
 | **VENTAS** | 28 | 10.7 M | 5.1 | `Venta`/`Venta_Encabezado`, `Remision`, `Pedido`, `Factura`, `Precio_Minimo` |
 | **NÓMINA** | 44 | 7.5 M | 5.6 | `Pre_Nomina`, `Nomina`, `Control_Asistencia`, `Empleado` |
 | **LOGÍSTICA** | 30 | 7.2 M | 2.6 | `Orden_Entrega`, `Entrega_Documento`, `Viaje`, `Complemento_Carta_Porte` |
@@ -105,6 +105,21 @@ De las 632 tablas vacías, las familias más grandes:
 | `Evaluacion_*` | 7 | Evaluación de personal |
 
 Ignorarlas en el catálogo de BI. No tiene sentido borrarlas: son parte del producto y una actualización del ERP las recrearía.
+
+## `Transferencia`
+
+> ⚠️ Reportado en sesión de trabajo 2026-08-21, **no re-verificado por Claude Code** (esta máquina no tiene acceso a `.205`/`.207`/`postgres-dw`). Confirmar con query real antes de confiar en cifras exactas.
+
+Tabla del ERP para traspasos de mercancía entre almacenes/sucursales, origen del mart `fct_transferencia` (ver [Warehouse](warehouse.md)). Explorada a partir del reporte nativo "Transferencias por recibir" (`RPTRF01L`).
+
+- **PK real:** `(Tr_Folio, Tr_ID)` — compuesta, confirmada por query contra los datos, no por constraint declarado en el esquema.
+- **`Tr_Tipo`**: `EN`=envío, `RC`=recepción, `SL`=solicitud (no afecta inventario).
+- **Estados reales para `Tr_Tipo='EN'`** (conteos reportados en sesión, no re-verificados aquí): `AC` 207 · `CA` 14,282 · `CE` 5,784 · `RCT` 192,120.
+  - El reporte nativo `RPTRF01L` filtra `IN('AC','RCP')`, pero `'RCP'` **no existe** en los datos reales — filtro muerto, posiblemente un state code viejo reemplazado por `RCT`. En la práctica el filtro nativo equivale a filtrar solo `AC`.
+  - Significado del estado `CE` sin resolver.
+- `al_cve_almacen_recibe` y `z_tr_operador_recepcion` existen pero quedan `NULL` mientras el estado es `AC` (aún no hay recepción) — no se usaron en el mart.
+- **Nombre de operador**: `Oper_Alta` guarda una clave (ej. `LEUAN`, `RVARGUEZ`), no el nombre. Se resuelve vía `EMPRESAS_2.dbo.Operadores` (`Operador`, `Nombre`, `EMail`, …) — join cross-database contra otra base en la misma instancia. **No está en el pipeline de dlt** (`raw.*`); el mart se queda con la clave por ahora, resolución de nombre pendiente.
+- `Sc_Descripcion` (Sucursal) y `Al_Descripcion` (Almacen) sí resuelven a nombre — ambas ya están en `raw.*` vía dlt.
 
 ## Personalizaciones `ZTRV_*` más relevantes
 

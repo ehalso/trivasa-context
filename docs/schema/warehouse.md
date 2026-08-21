@@ -40,6 +40,7 @@ La lección que fijó el criterio: `reorden` estaba en `merge` y Postgres acumul
 | `compra_encabezado` | 69,297 | `Compra_Encabezado` | `(co_folio)` | `Fecha_Ult_Modif` |
 | `producto` | 27,462 | `Producto` | `(pr_cve_producto)` | `Fecha_Ult_Modif` |
 | `requisicion_compra` | 83,146 | `Requisicion_Compra` | `(rc_folio, rc_id)` | `Fecha_Ult_Modif` |
+| `transferencia` | — (agregado 2026-08-21) | `Transferencia` | `(tr_folio, tr_id)` | `Fecha_Ult_Modif` |
 
 `comprobante_digital` cubre 2012-01-10 en adelante, con 14 valores de `cd_tabla` (`FACTURA`, `TRASLADO`, `GASTO_REGISTRO`, `NOMINA`, `COMPROBANTE_PAGO`, `COMPRA`, `CHEQUE`, `NOTA_CREDITO`, `CUENTA_X_PAGAR`, `COMPRA_INDIRECTO`, `NOTA_CREDITO_PROVEEDOR`, `ANTICIPO_CXP`, `CONSTANCIA_RETENCION`, `CONTABILIDAD_ELECTRONICA`).
 
@@ -87,7 +88,25 @@ abril, más vieja que la de `.200`), así que `connection.py` (que apunta a
 
 ## Marts de dbt
 
-`dim_producto` (14,668) · `fct_compras` (62,762) · `fct_existencias` (1,516,397) · `fct_gastos_cfdi` (12,229) · `fct_ordenes_compra` · `fct_solicitud_material_pipeline` (250,992, grano línea) · `fct_solicitud_material_autorizacion` (31,294, grano folio)
+`dim_producto` (14,668) · `fct_compras` (62,762) · `fct_existencias` (1,516,397) · `fct_gastos_cfdi` (12,229) · `fct_ordenes_compra` · `fct_solicitud_material_pipeline` (250,992, grano línea) · `fct_solicitud_material_autorizacion` (31,294, grano folio) · `fct_transferencia` (143 filas, grano folio — agregado 2026-08-21)
+
+### `fct_transferencia` (2026-08-21)
+
+Mart nuevo para Lightdash, origen: reporte nativo "Transferencias por recibir" (`RPTRF01L`). Detalle de la tabla fuente en [Dominios → Transferencia](dominios.md#transferencia).
+
+Pipeline completo:
+
+- `dlt/load_transferencia.py` — archivo dedicado (decisión explícita: no colgarlo de `load_movimiento.py`). Funciones: `transferencia()`, `backfill_205_transferencia()`, `run_incremental_207_transferencia()`. `pipeline_name="trivasa_transferencia"`.
+- `dbt/models/staging/stg_transferencia.sql` — view, filtra `tr_tipo='EN' AND es_cve_estado='AC'`, sin joins.
+- `dbt/models/intermediate/int_transferencia.sql` — view, `LEFT JOIN` a `sucursal` (x2: origen y destino) + `almacen`.
+- `dbt/models/marts/fct_transferencia.sql` — table, agregado por folio: 143 filas desde 207 líneas de detalle.
+- `_sources.yml` y `_marts.yml` actualizados.
+- Cron: línea agregada a las 06:55 en el crontab de `ealcocer` (ruta ya migrada a `~/ehalso/trivasa-bi-core/dlt`, no la vieja `trivasa-bi-dev` — ver [Cron actual](#cron-actual)).
+- Deployado a Lightdash (proyecto `trivasa_dw`), 12/12 explores.
+
+**Pendiente, no resuelto:**
+- Resolución de nombre de operador (`EMPRESAS_2.Operadores`) — el mart se queda con la clave `Oper_Alta` por ahora.
+- Significado del estado `CE` en `Transferencia`.
 
 > Hay un modelo `fct_movimientos.sql` en el repo **sin tabla materializada** en `analytics_marts` — revisar si falla o si nunca se corrió.
 
@@ -122,9 +141,12 @@ en su lugar.
 | 06:30 | `load_compras_inventario.run_incremental_207_all()` (incluye `requisicion_compra` desde 2026-08-13) |
 | 06:45 | `load_movimiento.run_incremental_207()` |
 | 06:50 | `load_solicitudes.run_incremental_207_all()` (incluye `ztrv_apartado`/`ztrv_presupuesto_autorizacion_documento` desde 2026-08-13) |
+| 06:55 | `load_transferencia.run_incremental_207_transferencia()` (agregado 2026-08-21) |
 | 07:00 | `check_raw_freshness.py` |
 
 > Los diagramas ER de estas tablas y sus relaciones verificadas están en [Modelos de datos de `raw`](modelos-raw.md).
+
+> ⚠️ **Riesgo abierto (reportado 2026-08-21): `dbt run` no está agendado en ningún cron/systemd.** Solo dlt y `check_raw_freshness` corren automático. Todo mart materializado como `table` (incluido `fct_transferencia`) se queda congelado en el warehouse hasta que alguien corra `dbt run` a mano — no es un problema de una tabla en particular, es un hueco del repo completo.
 
 ## Qué falta — 800 tablas con datos
 
@@ -145,4 +167,6 @@ La cobertura está sesgada a **compras e inventario**. Prioridades:
 
 ### Nota de reconciliación
 
-`raw.almacen` (464) y `raw.sucursal` (41) traen menos filas que `TRIVASADB3` (928 y 82) porque vienen de `.204`/`.207`, no de la copia. Conviene reconciliarlas contra `.207` antes de usarlas como dimensión.
+`raw.almacen` (465) sigue sin reconciliar contra `TRIVASADB3` (.205, 928 filas) — gap abierto. En el caso concreto de `fct_transferencia` (sesión 2026-08-21) el `LEFT JOIN` contra `raw.almacen` no generó `NULL`s, pero el gap en sí no está resuelto y puede afectar otros usos.
+
+`raw.sucursal` (41) **ya no es gap** — reportado y aceptado en sesión 2026-08-21 como completo (ver [Calidad de datos](calidad-de-datos.md)); la fila de arriba que lo agrupaba con `almacen` quedó obsoleta para `sucursal`.
